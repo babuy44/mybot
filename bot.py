@@ -3,8 +3,8 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ⚠️ ВСТАВЬТЕ НОВЫЙ ТОКЕН ОТ @BotFather (получите через /newtoken)
-TOKEN = "8803386602:AAEit-aewQx4j8aBqdMS16c7NikdTuJ0jys"
+# ⚠️ ВСТАВЬТЕ НОВЫЙ ТОКЕН (получите через /newtoken в @BotFather)
+TOKEN = "8803386602:AAG2gBQ7GVcZuysFPbU_NFxYTTbwVBawM4c"
 
 YOUR_ID = 1663746192
 DATA_FILE = 'balances.json'
@@ -79,8 +79,9 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 balances[user_id] = current_balance - amount
                 save_balances(balances)
                 address = context.user_data.get('send_address', 'неизвестно')
-                txid = abs(hash(f"{user_id}{amount}{address}")) % (10**16)
-                await update.message.reply_text(f"✅ *Отправлено!*\n\n📤 Сумма: `{amount}` USDT\n📍 Адрес: `{address}`\n🆔 Транзакция: `{txid:016x}`\n\n⚠️ *Демо-режим*", parse_mode='Markdown')
+                import random
+                txid = ''.join(random.choices('0123456789abcdef', k=16))
+                await update.message.reply_text(f"✅ *Отправлено!*\n\n📤 Сумма: `{amount}` USDT\n📍 Адрес: `{address}`\n🆔 Транзакция: `{txid}`\n\n⚠️ *Демо-режим*", parse_mode='Markdown')
             context.user_data.pop('awaiting_amount', None)
             context.user_data.pop('send_address', None)
             keyboard = [[InlineKeyboardButton("💰 Мой баланс", callback_data='balance')], [InlineKeyboardButton("📤 Отправить вручную", callback_data='send_manual')], [InlineKeyboardButton("⚡ Отправить в стек", callback_data='send_stack')]]
