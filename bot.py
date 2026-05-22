@@ -14,7 +14,7 @@ API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
 BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
 OWNER_ID = 1663746192
 CRYPTO_ADDRESS = '0xYourAddress'
-WEBHOOK_URL = 'https://your-app.up.railway.app'
+WEBHOOK_URL = 'mybot-production-0351.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
