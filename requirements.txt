@@ -1,4 +1,2 @@
 telethon
 flask
-nest_asyncio
-python-dotenv
