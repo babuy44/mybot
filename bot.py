@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import signal
+import sys
 import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
@@ -8,6 +10,12 @@ from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
 
 nest_asyncio.apply()
+
+def handler(signum, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, handler)
+signal.signal(signal.SIGINT, handler)
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -176,8 +184,10 @@ async def msg(event):
         target_id = int(parts[1])
         message = parts[2] if len(parts) > 2 else ''
         await bot.send_message(target_id, message)
+        print(f'ОТПРАВЛЕНО: {target_id} <- {message}')
         await event.respond('Отправлено')
-    except:
+    except Exception as e:
+        print(f'ОШИБКА MSG: {e}')
         await event.respond('/msg <id> <текст>')
 
 async def main():
