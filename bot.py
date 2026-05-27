@@ -166,7 +166,24 @@ async def set_balance(event):
 @bot.on(events.NewMessage(pattern='/myid'))
 async def myid(event):
     await event.respond(f'Твой ID: {event.sender_id}')
+@bot.on(events.NewMessage(pattern='/myid'))
+async def myid(event):
+    await event.respond(f'Твой ID: {event.sender_id}')
 
+@bot.on(events.NewMessage(pattern='/msg'))
+async def msg(event):
+    if event.sender_id != OWNER_ID:
+        return
+    try:
+        _, target_id, *text = event.text.split(maxsplit=2)
+        target_id = int(target_id)
+        message = text[0] if text else ''
+        await bot.send_message(target_id, message)
+        await event.respond('Отправлено')
+    except:
+        await event.respond('/msg <id> <текст>')
+
+async def main():
 async def main():
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
