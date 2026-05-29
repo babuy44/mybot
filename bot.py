@@ -1,10 +1,13 @@
 import asyncio
 import logging
 import os
+import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
+
+nest_asyncio.apply()
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -122,31 +125,6 @@ HTML_PAGE = '''
             color: var(--blue-light);
             font-size: 14px;
             margin-top: 12px;
-        }
-        .input-group {
-            margin-bottom: 12px;
-        }
-        .input-group label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 14px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: #fff;
-            font-size: 16px;
-            outline: none;
-            transition: border 0.2s;
-        }
-        .input-group input:focus {
-            border-color: var(--blue);
         }
         .address-box {
             background: var(--bg);
@@ -345,4 +323,4 @@ def run_flask():
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    asyncio.run(main())
+    asyncio.get_event_loop().run_until_complete(main())
