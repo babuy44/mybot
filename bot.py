@@ -5,7 +5,8 @@ from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
-
+if os.environ.get('CLEAR_SESSION'):
+    os.remove('bot_session.session') if os.path.exists('bot_session.session') else None
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
 BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
