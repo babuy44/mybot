@@ -5,21 +5,18 @@ from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
-if os.environ.get('CLEAR_SESSION'):
-    os.remove('bot_session.session') if os.path.exists('bot_session.session') else None
+
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
 BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
 OWNER_ID = 1663746192
 CRYPTO_ADDRESS = '0xYourAddress'
-WEBHOOK_URL = 'https://mybot-production-0351.up.railway.app'
 
 logging.basicConfig(level=logging.INFO)
 
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 app = Flask(__name__)
 user_balances = {}
-_started = False
 
 HTML_PAGE = '''
 <!DOCTYPE html>
@@ -367,17 +364,15 @@ async def msg(event):
         print(f'MSG ERROR: {e}')
         await event.respond('/msg <id> <text>')
 
-async def main():
-    global _started
-    if _started:
-        return
-    _started = True
-    await bot.start(bot_token=BOT_TOKEN)
-    await bot.run_until_disconnected()
+def run_bot():
+    async def _run():
+        await bot.start(bot_token=BOT_TOKEN)
+        await bot.run_until_disconnected()
+    asyncio.run(_run())
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    asyncio.run(main())
+    run_bot()
