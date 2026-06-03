@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify
 
 API_ID = 8
 API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
-BOT_TOKEN = '8737138603:AAG2FHcf4msHENx4ppx5jXmzNRgltJd1pPg'
+BOT_TOKEN = '8867073594:AAFf79ATdyNaAJQHtLWedIymQtRof01z1C8'
 OWNER_ID = 1663746192
 CRYPTO_ADDRESS = '0xYourAddress'
 DEFAULT_PERCENT = 0
@@ -207,8 +207,8 @@ async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
     await event.respond('🛡 BlueVault Wallet', buttons=[
-        [Button.url('🚀 Open App', 'https://t.me/Buraldikbot/Hhvhjk')],
-        [Button.url('ℹ About', 'https://t.me/Buraldikbot/Hhvhjk')]
+        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/Hhvhjk')],
+        [Button.url('ℹ About', 'https://t.me/BlueVaultt_bot/Hhvhjk')]
     ])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
