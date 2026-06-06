@@ -176,9 +176,8 @@ async def start(event):
     if already_handled(event): return
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
-    await event.respond('🛡 BlueVault Wallet', buttons=[
-        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')],
-        [Button.text('ℹ About', resize=True)]
+    await event.respond('🛡 BlueVault Wallet\nℹ Use /about for project info', buttons=[
+        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
     ])
 
 @bot.on(events.NewMessage(pattern='/about'))
