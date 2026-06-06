@@ -269,10 +269,14 @@ async def end_verify(event):
         await event.respond('/endverify <id>')
 
 async def main():
-    for f in glob.glob('*.session'):
-        os.remove(f)
+    for f in glob.glob('bot_session.session'):
+        try:
+            os.remove(f)
+        except:
+            pass
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
+    
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
