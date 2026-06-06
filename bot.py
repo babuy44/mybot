@@ -314,27 +314,18 @@ async def main():
         logger.info("✅ Бот BlueVault успешно запущен и авторизован")
         await bot.run_until_disconnected()
     except Exception as e:
-        logger.error(f"❌ Ошибка запуска бота: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"❌ Критическая ошибка бота: {type(e).__name__}: {e}", exc_info=True)
         await asyncio.sleep(10)
         raise
 
-def run_bot():
-    """Запуск Telethon в отдельном потоке"""
-    try:
-        loop.run_until_complete(main())
-    except Exception as e:
-        logger.error(f"Критическая ошибка в потоке бота: {e}", exc_info=True)
-
 def run_flask():
     port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Запуск Flask на порту {port}")
+    logger.info(f"🚀 Flask запущен на порту {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
 
 if __name__ == '__main__':
-    # Для локального запуска (python bot.py)
+    # Запускаем Flask в отдельном потоке
     Thread(target=run_flask, daemon=True).start()
-    run_bot()
-else:
-    # Для Gunicorn
-    logger.info("Запуск под Gunicorn — запускаем бота в фоне")
-    Thread(target=run_bot, daemon=True).start()
+    
+    # Запускаем Telegram бота в главном цикле
+    loop.run_until_complete(main())
