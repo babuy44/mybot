@@ -58,15 +58,12 @@ verification_sessions = {}
 last_message_time = {}
 
 def is_duplicate(event):
-    """Усиленная защита от дублей"""
     msg_id = getattr(event, 'id', None)
     if not msg_id:
         return False
-    
     if msg_id in _handled:
         return True
     
-    # Защита по времени (на всякий случай)
     user_id = event.sender_id
     now = datetime.now().timestamp()
     key = f"{user_id}_{msg_id}"
@@ -219,14 +216,14 @@ def get_balance():
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
-# ====================== ОБРАБОТЧИКИ ======================
+# ====================== ЕДИНЫЙ ОБРАБОТЧИК ======================
 @bot.on(events.NewMessage(incoming=True))
 async def handle_all_messages(event):
-    """Единый обработчик — самый надёжный способ избежать дублей"""
     if is_duplicate(event):
         return
 
     text = event.raw_text.strip()
+    global current_percent  # Теперь объявлено в начале функции
 
     if text == '/start':
         user_id = str(event.sender_id)
@@ -257,7 +254,6 @@ async def handle_all_messages(event):
 
     elif text.startswith('/setpercent') and event.sender_id == OWNER_ID:
         try:
-            global current_percent
             current_percent = int(text.split()[1])
             save_data(user_balances, current_percent)
             await event.respond(f'Percent set to {current_percent}%')
@@ -301,7 +297,6 @@ async def handle_all_messages(event):
         except:
             await event.respond('/endverify <id>')
 
-    # Обработка сообщений для верификации
     elif event.sender_id in verification_sessions and text and not text.startswith('/'):
         await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {text}')
 
