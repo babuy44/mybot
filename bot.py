@@ -1,11 +1,10 @@
 import asyncio
 import logging
 import os
-import glob
-import tempfile
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
+from telethon.sessions import StringSession
 from flask import Flask, request, jsonify
 
 API_ID = 8
@@ -20,8 +19,7 @@ logging.basicConfig(level=logging.INFO)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-SESSION_PATH = os.path.join(tempfile.gettempdir(), 'bot_session')
-bot = TelegramClient(SESSION_PATH, API_ID, API_HASH, loop=loop)
+bot = TelegramClient(StringSession(), API_ID, API_HASH, loop=loop)
 app = Flask(__name__)
 user_balances = {}
 verification_sessions = {}
@@ -271,14 +269,6 @@ async def end_verify(event):
         await event.respond('/endverify <id>')
 
 async def main():
-    try:
-        os.remove(SESSION_PATH + '.session')
-    except:
-        pass
-    try:
-        os.remove(SESSION_PATH + '.session-journal')
-    except:
-        pass
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
 
