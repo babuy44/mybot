@@ -223,7 +223,7 @@ async def handle_all_messages(event):
         return
 
     text = event.raw_text.strip()
-    global current_percent  # Теперь объявлено в начале функции
+    global current_percent
 
     if text == '/start':
         user_id = str(event.sender_id)
@@ -302,12 +302,26 @@ async def handle_all_messages(event):
 
 # ====================== ЗАПУСК ======================
 async def main():
-    await bot.start(bot_token=BOT_TOKEN)
-    logger.info("✅ Бот BlueVault успешно запущен")
-    await bot.run_until_disconnected()
+    try:
+        logger.info("🔄 Подключение к Telegram...")
+        await bot.start(
+            bot_token=BOT_TOKEN,
+            connection_retries=5,
+            retry_delay=3,
+            timeout=30,
+            request_retries=5
+        )
+        logger.info("✅ Бот BlueVault успешно запущен и авторизован")
+        await bot.run_until_disconnected()
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска бота: {type(e).__name__}: {e}", exc_info=True)
+        await asyncio.sleep(10)
+        raise
 
 def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"🚀 Запуск Flask на порту {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
 
 if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
