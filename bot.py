@@ -225,21 +225,25 @@ async def handle_all_messages(event):
     text = event.raw_text.strip()
     global current_percent
 
-    if text == '/start':
+        if text == '/start':
         user_id = str(event.sender_id)
         user_balances.setdefault(user_id, 0)
         save_data(user_balances, current_percent)
-        await event.respond('🛡 BlueVault Wallet\nℹ Use /about for project info', buttons=[
-            [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
-        ])
 
-    elif text == '/about':
+        await event.respond(
+            '🛡 **Welcome to BlueVault**\n\n'
+            'Use the button below to open the Web App.\n\n'
+            '• To withdraw funds — complete verification with /verify first\n'
+            '• For more information — use /about',
+            buttons=[
+                [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
+            ]
+        )
+
+        elif text == '/about':
         await event.respond(
             'ℹ **About BlueVault**\n\n'
-            '**1. Схема работы:** Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.\n\n'
-            '**2. Доступ закрытый:** Проект не является публичной офертой. Доступ только по персональному приглашению. Логика алгоритмов не разглашается.\n\n'
-            '**3. Отказ от ответственности:** Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют никакого результата. Участник действует на свой риск. Изменения баланса не являются обязательством выплат со стороны BlueVault.\n\n'
-            '**4. Благодарность:** Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.'
+            '**1. Схема работы:** ... (старый русский текст)'
         )
 
     elif text.startswith('/setbalance') and event.sender_id == OWNER_ID:
