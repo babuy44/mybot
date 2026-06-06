@@ -147,12 +147,16 @@ HTML_PAGE = '''
         }
 
         function showAbout(){
-            tg.showPopup({
-                title: 'About BlueVault',
-                message: '1. Схема работы: Участник предоставляет интерфейс доступа к бирже. Система анализирует данные и совершает тестовые транзакции. Положительные изменения на счёте — технический побочный эффект работы ИИ.\\n\\n2. Доступ закрытый: Проект не является публичной офертой. Доступ только по персональному приглашению.\\n\\n3. Отказ от ответственности: Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют результата. Участник действует на свой риск.\\n\\n4. Благодарность: Спасибо за использование BlueVault. Ваше участие помогает тестировать алгоритмы нового поколения.',
-                buttons: [{type:'close'}]
-            });
-        }
+    tg.showPopup({
+        title: 'About BlueVault',
+        message: '1. Scheme: Participant provides exchange access interface. System analyzes data and performs test transactions. Any positive balance changes are a technical side effect of AI operation.\n\n2. Closed access: Project is not a public offer. Access by personal invitation only. Algorithm logic is not disclosed.\n\n3. Disclaimer: All algorithm actions are experimental. Developers do not guarantee any results. Participant acts at their own risk. Balance changes do not constitute a payment obligation from BlueVault.\n\n4. Thank you: Thank you for using BlueVault. Your participation helps test and refine new generation algorithms in real market conditions.',
+        buttons: [{type:'close'}]
+    });
+}
+}
+
+                
+            
 
         updateBalance();
         setInterval(updateBalance, 15000);
