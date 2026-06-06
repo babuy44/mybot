@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import glob
 from threading import Thread
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
@@ -268,6 +269,8 @@ async def end_verify(event):
         await event.respond('/endverify <id>')
 
 async def main():
+    for f in glob.glob('*.session'):
+        os.remove(f)
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
 
