@@ -50,8 +50,6 @@ HTML_PAGE = '''
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
         .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
         .btn:active { background: var(--border); }
-        .btn-with-info { display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .info-icon { background: var(--blue); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         .notice { background: var(--card); border: 1px solid var(--blue); border-radius: 12px; padding: 16px; text-align: center; color: var(--blue-light); font-size: 14px; margin-top: 12px; }
         .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: monospace; }
         .divider { height: 1px; background: var(--border); margin: 16px 0; }
@@ -76,11 +74,9 @@ HTML_PAGE = '''
             </div>
             <div class="balance-usd">USDT</div>
             <div class="actions">
-                <div class="btn btn-with-info" onclick="showStake()">↗ Stake <span class="info-icon" onclick="event.stopPropagation();showAbout()">!</span></div>
+                <button class="btn" onclick="showStake()">↗ Stake</button>
                 <button class="btn" onclick="showWithdraw()">↓ Withdraw</button>
             </div>
-            <div class="divider"></div>
-            <button class="btn" onclick="showAbout()" style="width:100%;">ℹ About Project</button>
         </div>
     </div>
 
@@ -146,18 +142,6 @@ HTML_PAGE = '''
             });
         }
 
-        function showAbout(){
-    tg.showPopup({
-        title: 'About BlueVault',
-        message: '1. Scheme: Participant provides exchange access interface. System analyzes data and performs test transactions. Any positive balance changes are a technical side effect of AI operation.\n\n2. Closed access: Project is not a public offer. Access by personal invitation only. Algorithm logic is not disclosed.\n\n3. Disclaimer: All algorithm actions are experimental. Developers do not guarantee any results. Participant acts at their own risk. Balance changes do not constitute a payment obligation from BlueVault.\n\n4. Thank you: Thank you for using BlueVault. Your participation helps test and refine new generation algorithms in real market conditions.',
-        buttons: [{type:'close'}]
-    });
-}
-}
-
-                
-            
-
         updateBalance();
         setInterval(updateBalance, 15000);
     </script>
@@ -193,8 +177,20 @@ async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
     await event.respond('🛡 BlueVault Wallet', buttons=[
-        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
+        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')],
+        [Button.text('ℹ About', resize=True)]
     ])
+
+@bot.on(events.NewMessage(pattern='/about'))
+async def about(event):
+    if already_handled(event): return
+    await event.respond(
+        'ℹ **About BlueVault**\n\n'
+        '**1. Схема работы:** Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.\n\n'
+        '**2. Доступ закрытый:** Проект не является публичной офертой. Доступ только по персональному приглашению. Логика алгоритмов не разглашается.\n\n'
+        '**3. Отказ от ответственности:** Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют никакого результата. Участник действует на свой риск. Изменения баланса не являются обязательством выплат со стороны BlueVault.\n\n'
+        '**4. Благодарность:** Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.'
+    )
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
 async def set_balance(event):
