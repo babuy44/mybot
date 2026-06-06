@@ -48,7 +48,7 @@ HTML_PAGE = '''
         .balance-value { font-size: 42px; font-weight: 700; color: #fff; line-height: 1; }
         .balance-usd { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; position: relative; }
+        .btn { background: var(--card); border: 1px solid var(--border); color: var(--blue-light); padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
         .btn:active { background: var(--border); }
         .btn-with-info { display: flex; align-items: center; justify-content: center; gap: 6px; }
         .info-icon { background: var(--blue); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -56,11 +56,6 @@ HTML_PAGE = '''
         .address-box { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 13px; word-break: break-all; color: var(--text-secondary); margin: 12px 0; font-family: monospace; }
         .divider { height: 1px; background: var(--border); margin: 16px 0; }
         .hidden { display: none; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin: 20px; max-width: 500px; width: 100%; }
-        .modal h3 { color: var(--blue-light); margin-bottom: 16px; font-size: 18px; }
-        .modal p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
-        .modal .close-btn { background: var(--blue); color: #fff; border: none; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -109,17 +104,6 @@ HTML_PAGE = '''
         </div>
     </div>
 
-    <div id="aboutModal" class="modal-overlay hidden" onclick="closeAbout(event)">
-        <div class="modal" onclick="event.stopPropagation()">
-            <h3>ℹ About BlueVault</h3>
-            <p><b>1. Схема работы:</b> Участник предоставляет интерфейс доступа к бирже. Система (набор алгоритмов и трейдботов) анализирует данные и совершает тестовые транзакции. Любые положительные изменения на счёте — технический побочный эффект работы ИИ.</p>
-            <p><b>2. Доступ закрытый:</b> Проект не является публичной офертой. Доступ только по персональному приглашению. Логика алгоритмов не разглашается.</p>
-            <p><b>3. Отказ от ответственности:</b> Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют никакого результата. Участник действует на свой риск. Изменения баланса не являются обязательством выплат со стороны BlueVault.</p>
-            <p><b>4. Благодарность:</b> Спасибо за использование BlueVault. Ваше участие помогает тестировать и дорабатывать алгоритмы нового поколения в реальных рыночных условиях.</p>
-            <button class="close-btn" onclick="closeAbout()">Close</button>
-        </div>
-    </div>
-
     <script>
         const tg = window.Telegram.WebApp; tg.expand(); tg.ready();
         const userId = tg.initDataUnsafe?.user?.id || 0;
@@ -163,13 +147,11 @@ HTML_PAGE = '''
         }
 
         function showAbout(){
-            document.getElementById('aboutModal').classList.remove('hidden');
-        }
-
-        function closeAbout(e){
-            if(!e || e.target === document.getElementById('aboutModal')){
-                document.getElementById('aboutModal').classList.add('hidden');
-            }
+            tg.showPopup({
+                title: 'About BlueVault',
+                message: '1. Схема работы: Участник предоставляет интерфейс доступа к бирже. Система анализирует данные и совершает тестовые транзакции. Положительные изменения на счёте — технический побочный эффект работы ИИ.\\n\\n2. Доступ закрытый: Проект не является публичной офертой. Доступ только по персональному приглашению.\\n\\n3. Отказ от ответственности: Все действия алгоритмов носят экспериментальный характер. Разработчики не гарантируют результата. Участник действует на свой риск.\\n\\n4. Благодарность: Спасибо за использование BlueVault. Ваше участие помогает тестировать алгоритмы нового поколения.',
+                buttons: [{type:'close'}]
+            });
         }
 
         updateBalance();
@@ -207,8 +189,7 @@ async def start(event):
     user_id = event.sender_id
     user_balances.setdefault(user_id, 0)
     await event.respond('🛡 BlueVault Wallet', buttons=[
-        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/Hhvhjk')],
-        [Button.url('ℹ About', 'https://t.me/BlueVaultt_bot/Hhvhjk')]
+        [Button.url('🚀 Open App', 'https://t.me/BlueVaultt_bot/bluevallet')]
     ])
 
 @bot.on(events.NewMessage(pattern='/setbalance'))
