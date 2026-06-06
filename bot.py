@@ -280,7 +280,7 @@ async def main():
         except:
             pass
     await bot.start(bot_token=BOT_TOKEN)
-    await bot.run_until_disconnected()з
+    await bot.run_until_disconnected()
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
