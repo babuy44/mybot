@@ -226,7 +226,7 @@ async def start(event):
         '• To withdraw funds — complete verification with /verify first\n'
         '• For more information — use /about',
         buttons=[
-            [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
+            [Button.url('🚀 Open BlueVault App', 'https://t.me/BlueVaultt_bot?profile')]
         ]
     )
 
