@@ -229,7 +229,7 @@ async def start(event):
             [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
         ]
     )
-    )
+    
 @bot.on(events.NewMessage(incoming=True, pattern='/about'))
 async def about(event):
     if is_duplicate(event): return
