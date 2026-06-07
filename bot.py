@@ -312,7 +312,21 @@ async def end_verify(event):
         await bot.send_message(target_id, '✅ Verification completed.')
         await event.respond(f'Ended for {target_id}')
     except:
-        await event.respond('/endverify <id>')
+        await event.respond('/endverify <id>') 
+
+@bot.on(events.NewMessage(incoming=True, pattern='/users'))
+async def list_users(event):
+    if is_duplicate(event) or event.sender_id != OWNER_ID: return
+    
+    if not user_balances:
+        await event.respond('Нет пользователей')
+        return
+    
+    users_list = "👥 **Список пользователей:**\n\n"
+    for uid, balance in user_balances.items():
+        users_list += f"🆔 `{uid}` | 💰 {balance} USDT\n"
+    
+    await event.respond(users_list)
 
 # ====================== ЗАПУСК ======================
 async def main():
