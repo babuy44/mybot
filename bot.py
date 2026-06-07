@@ -212,6 +212,7 @@ def get_address():
     return jsonify({'address': CRYPTO_ADDRESS})
 
 # ====================== ОБРАБОТЧИКИ ======================
+
 @bot.on(events.NewMessage(incoming=True, pattern='/start'))
 async def start(event):
     if is_duplicate(event): return
@@ -225,10 +226,9 @@ async def start(event):
         '• To withdraw funds — complete verification with /verify first\n'
         '• For more information — use /about',
         buttons=[
-            [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
+            [Button.web_app('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
         ]
     )
-
 @bot.on(events.NewMessage(incoming=True, pattern='/about'))
 async def about(event):
     if is_duplicate(event): return
