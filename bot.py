@@ -226,10 +226,10 @@ async def start(event):
         '• To withdraw funds — complete verification with /verify first\n'
         '• For more information — use /about',
         buttons=[
-            [Button.web('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]  # ← изменено здесь
+            [Button.url('🚀 Open BlueVault App', 'https://mybot-production-702e.up.railway.app')]
         ]
     )
-    
+
 @bot.on(events.NewMessage(incoming=True, pattern='/about'))
 async def about(event):
     if is_duplicate(event): return
