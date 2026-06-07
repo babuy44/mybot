@@ -213,7 +213,7 @@ def get_address():
 
 # ====================== ОБРАБОТЧИКИ ======================
 
-@bot.on(events.NewMessage(incoming=True, pattern='/start'))
+bot.on(events.NewMessage(incoming=True, pattern='/start'))
 async def start(event):
     if is_duplicate(event): return
     user_id = str(event.sender_id)
